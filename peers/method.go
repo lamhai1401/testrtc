@@ -94,13 +94,13 @@ func (ps *Peers) getConfig() *webrtc.Configuration {
 }
 
 func (ps *Peers) register(id string, clientID string, handler func(wrapper *utils.Wrapper) error) {
-	if fwdm := ps.getAudioFwd(); fwdm != nil {
+	if fwdm := ps.getVideoFwd(); fwdm != nil {
 		fwdm.Register(id, clientID, handler)
 	}
 }
 
 func (ps *Peers) unRegister(id, clientID string) {
-	if fwdm := ps.getAudioFwd(); fwdm != nil {
+	if fwdm := ps.getVideoFwd(); fwdm != nil {
 		fwdm.Unregister(id, clientID)
 	}
 }
@@ -121,7 +121,11 @@ func (ps *Peers) closeConn(id string) {
 	if conn := ps.getConn(id); conn != nil {
 		ps.deleteConn(id)
 		conn.Close()
-		ps.unRegister(ps.getID(), conn.GetSignalID())
+		ps.unRegister(ps.getID(), conn.GetSessionID())
+
+		if mixer := ps.getVideoMixer(); mixer != nil {
+			mixer.RemoveVideo(conn.GetSessionID())
+		}
 		conn = nil
 	}
 }
@@ -142,6 +146,15 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 		switch state {
 		case "connected":
 			peer.SetConnected()
+			// register video source
+			ps.register(mixerID, peer.GetSessionID(), func(wrapper *utils.Wrapper) error {
+				err := peer.AddVideoRTP(&wrapper.Pkg)
+				if err != nil {
+					return err
+				}
+				logs.Stack(fmt.Sprintf("Write mixer video rtp to %s", peer.GetSessionID()))
+				return nil
+			})
 			break
 		case "closed":
 			ps.closeConn(peer.GetSignalID())
