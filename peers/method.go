@@ -121,10 +121,10 @@ func (ps *Peers) closeConn(id string) {
 	if conn := ps.getConn(id); conn != nil {
 		ps.deleteConn(id)
 		conn.Close()
-		ps.unRegister(ps.getID(), conn.GetSessionID())
+		ps.unRegister(ps.getID(), conn.GetSignalID())
 
 		if mixer := ps.getVideoMixer(); mixer != nil {
-			mixer.RemoveVideo(conn.GetSessionID())
+			mixer.RemoveVideo(conn.GetSignalID())
 		}
 		conn = nil
 	}
@@ -147,12 +147,12 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 		case "connected":
 			peer.SetConnected()
 			// register video source
-			ps.register(mixerID, peer.GetSessionID(), func(wrapper *utils.Wrapper) error {
+			ps.register(mixerID, peer.GetSignalID(), func(wrapper *utils.Wrapper) error {
 				err := peer.AddVideoRTP(&wrapper.Pkg)
 				if err != nil {
 					return err
 				}
-				logs.Stack(fmt.Sprintf("Write mixer video rtp to %s", peer.GetSessionID()))
+				logs.Stack(fmt.Sprintf("Write mixer video rtp to %s", peer.GetSignalID()))
 				return nil
 			})
 			break
@@ -187,7 +187,7 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 		// register to video mixer
 		if kind == "video" {
 			// start to register index
-			index, err := mixer.AddVideo(peer.GetSessionID())
+			index, err := mixer.AddVideo(peer.GetSignalID())
 			if err != nil {
 				logs.Error(err.Error())
 				return
