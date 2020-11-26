@@ -3,15 +3,13 @@ package peers
 import (
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/beowulflab/signal/signal-wss"
 	"github.com/lamhai1401/gologs/logs"
 	"github.com/lamhai1401/testrtc/peer"
 	"github.com/lamhai1401/testrtc/streams"
 	"github.com/lamhai1401/testrtc/utils"
-	"github.com/pion/rtcp"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 func (ps *Peers) getID() string {
@@ -167,22 +165,16 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 		}
 	})
 
-	conn.OnTrack(func(remoteTrack *webrtc.Track, r *webrtc.RTPReceiver) {
+	conn.OnTrack(func(remoteTrack *webrtc.TrackRemote, r *webrtc.RTPReceiver) {
 		kind := remoteTrack.Kind().String()
 		mixer := ps.getVideoMixer()
 		logs.Info(fmt.Sprintf("Has remote %s track of ID %s", kind, peer.GetSignalID()))
 
-		go func() {
-			ticker := time.NewTicker(time.Second * 3)
-			for range ticker.C {
-				errSend := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: remoteTrack.SSRC()}})
-				if errSend != nil {
-					fmt.Println(errSend)
-				}
-			}
-		}()
+		go peer.RapidResynchronizationRequest(remoteTrack)
+		go peer.ModifyBitrate(remoteTrack)
+		go peer.PictureLossIndication(remoteTrack)
 
-		fmt.Printf("Track has started, of type %d: %s \n", remoteTrack.PayloadType(), remoteTrack.Codec().Name)
+		fmt.Printf("Track has started, of type %d: %s \n", remoteTrack.PayloadType(), remoteTrack.Codec().MimeType)
 
 		// register to video mixer
 		if kind == "video" {
@@ -201,7 +193,15 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 					}
 					panic(readErr)
 				}
+				logs.Stack(fmt.Sprintf("Push %s video data to %d chann", peer.GetSignalID(), index))
 				mixer.PushVideo(index, rtp)
+
+				// write video data
+				err := peer.AddVideoRTP(rtp)
+				if err != nil {
+					logs.Error(err)
+				}
+
 				rtp = nil
 			}
 		}

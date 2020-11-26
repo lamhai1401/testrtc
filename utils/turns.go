@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 // GetTurnURL linter

@@ -3,7 +3,7 @@ package utils
 import (
 	"os"
 
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 var (

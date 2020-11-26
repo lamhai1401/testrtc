@@ -9,7 +9,7 @@ import (
 	"github.com/lamhai1401/testrtc/streams"
 	"github.com/lamhai1401/testrtc/utils"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 const (
@@ -38,7 +38,7 @@ func NewPeers() (*Peers, error) {
 		configs:    utils.GetTurns(),
 		audioFwdm:  utils.NewForwarderMannager("id"),
 		videoFwdm:  utils.NewForwarderMannager("id"),
-		videoMixer: streams.NewVideoStreamObj(10, mixerID),
+		videoMixer: streams.NewVideoStreamObj(9, mixerID),
 		// savers:    internal.NewWebm("test.webm"),
 	}
 

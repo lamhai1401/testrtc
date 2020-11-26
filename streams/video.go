@@ -37,10 +37,18 @@ func NewVideoStreamObj(
 		isClosed:     false,
 		mixedVideo:   make(chan *rtp.Packet, cacheLength),
 		videoInChann: make(map[int]chan *rtp.Packet),
-		videoMixing:  videoStaticMixer.GetGstreamerMixer(length),
+		videoMixing:  videoStaticMixer.GetGstreamerMixer(length, 1500*1000, true),
 	}
 
+	m.initVideoIn(length)
+
 	return m
+}
+
+func (m *VideoStreamObj) initVideoIn(length int) {
+	for i := 1; i <= length; i++ {
+		m.videoInChann[i] = make(chan *rtp.Packet, cacheLength)
+	}
 }
 
 // IsExist check peer connection id has index or not
@@ -60,7 +68,7 @@ func (m *VideoStreamObj) PushVideo(index int, data *rtp.Packet) error {
 	if im == nil {
 		return errNilIm
 	}
-	if chann := m.getAudioInChann(index); chann != nil {
+	if chann := m.getVideoInChann(index); chann != nil {
 		chann <- data
 	}
 	return nil
@@ -91,7 +99,7 @@ func (m *VideoStreamObj) RemoveVideo(peerConnectionID string) {
 
 // Start linter
 func (m *VideoStreamObj) Start() error {
-	err := m.videoMixing.Start(m.getAudioIn(), m.getMixedVideo())
+	err := m.videoMixing.Start(m.getVideoIn(), m.getMixedVideo())
 	if err != nil {
 		return err
 	}

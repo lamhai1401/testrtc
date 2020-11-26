@@ -2,35 +2,34 @@ package peer
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/lamhai1401/gologs/logs"
 	"github.com/lamhai1401/testrtc/utils"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
-func (p *Peer) getLocalAudioTrack() *webrtc.Track {
+func (p *Peer) getLocalAudioTrack() *webrtc.TrackLocalStaticRTP {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 	return p.localAudioTrack
 }
 
-func (p *Peer) setLocalAudioTrack(t *webrtc.Track) {
+func (p *Peer) setLocalAudioTrack(t *webrtc.TrackLocalStaticRTP) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	p.localAudioTrack = t
 }
 
-func (p *Peer) getLocalVideoTrack() *webrtc.Track {
+func (p *Peer) getLocalVideoTrack() *webrtc.TrackLocalStaticRTP {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 	return p.localVideoTrack
 }
 
-func (p *Peer) setLocalVideoTrack(t *webrtc.Track) {
+func (p *Peer) setLocalVideoTrack(t *webrtc.TrackLocalStaticRTP) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	p.localVideoTrack = t
@@ -75,7 +74,7 @@ func (p *Peer) setConn(c *webrtc.PeerConnection) {
 }
 
 // PictureLossIndication packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
-func (p *Peer) pictureLossIndication(remoteTrack *webrtc.Track) {
+func (p *Peer) PictureLossIndication(remoteTrack *webrtc.TrackRemote) {
 	ticker := time.NewTicker(time.Millisecond * 500)
 	for range ticker.C {
 		if p.checkClose() {
@@ -87,7 +86,7 @@ func (p *Peer) pictureLossIndication(remoteTrack *webrtc.Track) {
 			return
 		}
 
-		errSend := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: remoteTrack.SSRC()}})
+		errSend := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}})
 		if errSend != nil {
 			logs.Error("Picture loss indication write rtcp err: ", errSend.Error())
 			// return
@@ -96,7 +95,7 @@ func (p *Peer) pictureLossIndication(remoteTrack *webrtc.Track) {
 }
 
 // RapidResynchronizationRequest packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
-func (p *Peer) rapidResynchronizationRequest(remoteTrack *webrtc.Track) {
+func (p *Peer) RapidResynchronizationRequest(remoteTrack *webrtc.TrackRemote) {
 	ticker := time.NewTicker(time.Millisecond * 100)
 	for range ticker.C {
 		if p.checkClose() {
@@ -107,7 +106,7 @@ func (p *Peer) rapidResynchronizationRequest(remoteTrack *webrtc.Track) {
 		if conn == nil {
 			return
 		}
-		if routineErr := conn.WriteRTCP([]rtcp.Packet{&rtcp.RapidResynchronizationRequest{SenderSSRC: remoteTrack.SSRC(), MediaSSRC: remoteTrack.SSRC()}}); routineErr != nil {
+		if routineErr := conn.WriteRTCP([]rtcp.Packet{&rtcp.RapidResynchronizationRequest{SenderSSRC: uint32(remoteTrack.SSRC()), MediaSSRC: uint32(remoteTrack.SSRC())}}); routineErr != nil {
 			logs.Error("rapidResynchronizationRequest write rtcp err: ", routineErr.Error())
 			// return
 		}
@@ -116,7 +115,7 @@ func (p *Peer) rapidResynchronizationRequest(remoteTrack *webrtc.Track) {
 
 // ModifyBitrate so set bitrate when datachannel has signal
 // Use this only for video not audio track
-func (p *Peer) modifyBitrate(remoteTrack *webrtc.Track) {
+func (p *Peer) ModifyBitrate(remoteTrack *webrtc.TrackRemote) {
 	ticker := time.NewTicker(time.Millisecond * 500)
 	for range ticker.C {
 		bitrate := p.getBitrate()
@@ -127,7 +126,7 @@ func (p *Peer) modifyBitrate(remoteTrack *webrtc.Track) {
 		numbers := (*bitrate) * 1024
 		if conn := p.getConn(); conn != nil {
 			errSend := conn.WriteRTCP([]rtcp.Packet{&rtcp.ReceiverEstimatedMaximumBitrate{
-				SenderSSRC: remoteTrack.SSRC(),
+				SenderSSRC: uint32(remoteTrack.SSRC()),
 				Bitrate:    uint64(numbers),
 				// SSRCs:      []uint32{rand.Uint32()},
 			}})
@@ -152,20 +151,30 @@ func (p *Peer) setClose(state bool) {
 	p.isClosed = state
 }
 
-func (p *Peer) writeRTP(packet *rtp.Packet, track *webrtc.Track) error {
+func (p *Peer) writeRTP(packet *rtp.Packet, track *webrtc.TrackLocalStaticRTP) error {
 	// packet.PayloadType = track.PayloadType()
-	packet.SSRC = track.SSRC()
-	packet.Header.PayloadType = track.PayloadType()
+	// packet.SSRC = track.SSRC()
+	// packet.Header.PayloadType = track.PayloadType()
+
+	// writeErr := track.wr(packet)
+	// if writeErr != nil && !errors.Is(writeErr, io.ErrClosedPipe) {
+	// 	panic(writeErr)
+	// }
 	return track.WriteRTP(packet)
 }
 
 // CreateAudioTrack linter
-func (p *Peer) createAudioTrack(trackID string, codesc uint8) error {
+func (p *Peer) createAudioTrack(trackID string) error {
 	if conn := p.getConn(); conn != nil {
-		localTrack, err := conn.NewTrack(codesc, rand.Uint32(), trackID, trackID)
-		if err != nil {
-			return err
-		}
+		// localTrack, err := conn.NewTrack(codesc, rand.Uint32(), trackID, trackID)
+		// if err != nil {
+		// 	return err
+		// }
+		localTrack, err := webrtc.NewTrackLocalStaticRTP(
+			webrtc.RTPCodecCapability{MimeType: "audio/opus"},
+			fmt.Sprintf(trackID),
+			fmt.Sprintf(trackID),
+		)
 		// Add this newly created track to the PeerConnection
 		_, err = conn.AddTrack(localTrack)
 		if err != nil {
@@ -178,9 +187,13 @@ func (p *Peer) createAudioTrack(trackID string, codesc uint8) error {
 }
 
 // CreateVideoTrack linter
-func (p *Peer) createVideoTrack(trackID string, codesc uint8) error {
+func (p *Peer) createVideoTrack(trackID string) error {
 	if conn := p.getConn(); conn != nil {
-		localTrack, err := conn.NewTrack(codesc, rand.Uint32(), trackID, trackID)
+		localTrack, err := webrtc.NewTrackLocalStaticRTP(
+			webrtc.RTPCodecCapability{MimeType: "video/VP9"},
+			trackID,
+			trackID,
+		)
 		if err != nil {
 			return err
 		}
@@ -232,13 +245,27 @@ func (p *Peer) setCacheIce() error {
 
 // NewAPI linter
 func (p *Peer) addAPI() *webrtc.API {
-	return webrtc.NewAPI(webrtc.WithMediaEngine(*p.initMediaEngine()), webrtc.WithSettingEngine(*p.initSettingEngine()))
+	return webrtc.NewAPI(webrtc.WithMediaEngine(p.initMediaEngine()), webrtc.WithSettingEngine(*p.initSettingEngine()))
 }
 
 func (p *Peer) initMediaEngine() *webrtc.MediaEngine {
 	mediaEngine := &webrtc.MediaEngine{}
-	mediaEngine.RegisterCodec(webrtc.NewRTPOpusCodec(defaultAudioCodecs, 48000))
-	mediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(defaultVideoCodecs, 90000))
+	// mediaEngine.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+	// mediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
+
+	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+		PayloadType:        98,
+	}, webrtc.RTPCodecTypeVideo); err != nil {
+		logs.Error(err)
+	}
+
+	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+		PayloadType:        111,
+	}, webrtc.RTPCodecTypeAudio); err != nil {
+		logs.Error(err)
+	}
 	return mediaEngine
 }
 

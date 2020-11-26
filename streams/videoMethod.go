@@ -23,13 +23,13 @@ func (m *VideoStreamObj) getIM() *utils.IndexManager {
 	return m.im
 }
 
-func (m *VideoStreamObj) getAudioIn() map[int]chan *rtp.Packet {
+func (m *VideoStreamObj) getVideoIn() map[int]chan *rtp.Packet {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	return m.videoInChann
 }
 
-func (m *VideoStreamObj) getAudioInChann(index int) chan *rtp.Packet {
+func (m *VideoStreamObj) getVideoInChann(index int) chan *rtp.Packet {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	return m.videoInChann[index]

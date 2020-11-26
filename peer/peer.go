@@ -7,13 +7,13 @@ import (
 	"github.com/lamhai1401/testrtc/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
-var (
-	defaultAudioCodecs = uint8(webrtc.DefaultPayloadTypeOpus)
-	defaultVideoCodecs = uint8(webrtc.DefaultPayloadTypeVP8)
-)
+// var (
+// 	defaultAudioCodecs = uint8(webrtc.DefaultPayloadTypeOpus)
+// 	defaultVideoCodecs = uint8(webrtc.DefaultPayloadTypeVP8)
+// )
 
 // NewSDPType linter
 func NewSDPType(raw string) webrtc.SDPType {
@@ -34,10 +34,10 @@ type Peer struct {
 	bitrate           *int
 	iceCache          *utils.AdvanceMap
 	conn              *webrtc.PeerConnection
-	localVideoTrack   *webrtc.Track
-	localAudioTrack   *webrtc.Track
-	remotelVideoTrack *webrtc.Track
-	remoteVideoTrack  *webrtc.Track
+	localVideoTrack   *webrtc.TrackLocalStaticRTP
+	localAudioTrack   *webrtc.TrackLocalStaticRTP
+	remotelVideoTrack *webrtc.TrackRemote
+	remoteVideoTrack  *webrtc.TrackRemote
 	isConnected       bool
 	isClosed          bool
 	mutex             sync.RWMutex
@@ -70,11 +70,11 @@ func (p *Peer) NewConnection(sdp interface{}, config *webrtc.Configuration) (*we
 	}
 	p.setConn(conn)
 
-	if err := p.createAudioTrack(p.getSessionID(), defaultAudioCodecs); err != nil {
+	if err := p.createAudioTrack(p.getSignalID()); err != nil {
 		return nil, err
 	}
 
-	if err := p.createVideoTrack(p.getSessionID(), defaultVideoCodecs); err != nil {
+	if err := p.createVideoTrack(p.getSignalID()); err != nil {
 		return nil, err
 	}
 
