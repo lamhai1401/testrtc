@@ -5,11 +5,11 @@ import (
 	"io"
 	"time"
 
+	v2 "github.com/beowulflab/mixer-v2/v2"
+	"github.com/beowulflab/rtcbase-v2/utils"
 	"github.com/beowulflab/signal/signal-wss"
 	"github.com/lamhai1401/gologs/logs"
 	"github.com/lamhai1401/testrtc/peer"
-	"github.com/lamhai1401/testrtc/streams"
-	"github.com/lamhai1401/testrtc/utils"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v2"
 )
@@ -75,34 +75,10 @@ func (ps *Peers) setConn(id string, peer *peer.Peer) {
 	}
 }
 
-func (ps *Peers) getAudioFwd() utils.Fwdm {
-	ps.mutex.RLock()
-	defer ps.mutex.RUnlock()
-	return ps.audioFwdm
-}
-
-func (ps *Peers) getVideoFwd() utils.Fwdm {
-	ps.mutex.RLock()
-	defer ps.mutex.RUnlock()
-	return ps.videoFwdm
-}
-
 func (ps *Peers) getConfig() *webrtc.Configuration {
 	ps.mutex.RLock()
 	defer ps.mutex.RUnlock()
 	return ps.configs
-}
-
-func (ps *Peers) register(id string, clientID string, handler func(wrapper *utils.Wrapper) error) {
-	if fwdm := ps.getVideoFwd(); fwdm != nil {
-		fwdm.Register(id, clientID, handler)
-	}
-}
-
-func (ps *Peers) unRegister(id, clientID string) {
-	if fwdm := ps.getVideoFwd(); fwdm != nil {
-		fwdm.Unregister(id, clientID)
-	}
 }
 
 func (ps *Peers) addConn(id, session string) (*peer.Peer, error) {
@@ -121,10 +97,10 @@ func (ps *Peers) closeConn(id string) {
 	if conn := ps.getConn(id); conn != nil {
 		ps.deleteConn(id)
 		conn.Close()
-		ps.unRegister(ps.getID(), conn.GetSignalID())
 
-		if mixer := ps.getVideoMixer(); mixer != nil {
-			mixer.RemoveVideo(conn.GetSignalID())
+		if mixer := ps.getMixer(); mixer != nil {
+			mixer.RemoveVideoStream(conn.GetSignalID())
+			mixer.RemoveAudioStream(conn.GetSignalID())
 		}
 		conn = nil
 	}
@@ -145,16 +121,21 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 		logs.Info(fmt.Sprintf("Connection %s has states %s", peer.GetSignalID(), state))
 		switch state {
 		case "connected":
-			peer.SetConnected()
-			// register video source
-			ps.register(mixerID, peer.GetSignalID(), func(wrapper *utils.Wrapper) error {
-				err := peer.AddVideoRTP(&wrapper.Pkg)
-				if err != nil {
-					return err
-				}
-				logs.Stack(fmt.Sprintf("Write mixer video rtp to %s", peer.GetSignalID()))
-				return nil
-			})
+			if !peer.CheckConnected() {
+				peer.SetConnected()
+				// register video source
+				// ps.register(mixerID, peer.GetSignalID(), func(wrapper *utils.Wrapper) error {
+				// 	err := peer.AddVideoRTP(&wrapper.Pkg)
+				// 	if err != nil {
+				// 		return err
+				// 	}
+				// 	logs.Stack(fmt.Sprintf("Write mixer video rtp to %s", peer.GetSignalID()))
+				// 	return nil
+				// })
+
+				// register audio source
+
+			}
 			break
 		case "closed":
 			ps.closeConn(peer.GetSignalID())
@@ -169,7 +150,7 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 
 	conn.OnTrack(func(remoteTrack *webrtc.Track, r *webrtc.RTPReceiver) {
 		kind := remoteTrack.Kind().String()
-		mixer := ps.getVideoMixer()
+		mixer := ps.getMixer()
 		logs.Info(fmt.Sprintf("Has remote %s track of ID %s", kind, peer.GetSignalID()))
 
 		go func() {
@@ -184,32 +165,32 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 
 		fmt.Printf("Track has started, of type %d: %s \n", remoteTrack.PayloadType(), remoteTrack.Codec().Name)
 
-		// register to video mixer
-		if kind == "video" {
-			// start to register index
-			index, err := mixer.AddVideo(peer.GetSignalID())
-			if err != nil {
-				logs.Error(err.Error())
-				return
-			}
-			for {
-				// Read RTP packets being sent to Pion
-				rtp, readErr := remoteTrack.ReadRTP()
-				if readErr != nil {
-					if readErr == io.EOF {
-						return
-					}
-					panic(readErr)
+		for {
+			// Read RTP packets being sent to Pion
+			rtp, readErr := remoteTrack.ReadRTP()
+			if readErr != nil {
+				if readErr == io.EOF {
+					return
 				}
-				mixer.PushVideo(index, rtp)
-				rtp = nil
+				panic(readErr)
 			}
+
+			switch kind {
+			case "video":
+				mixer.PushVideoStream(peer.GetSignalID(), rtp)
+			case "audio":
+				mixer.PushAudioStream(peer.GetSignalID(), rtp)
+				break
+			default:
+				logs.Error(fmt.Sprintf("Remote track kind %s", kind))
+			}
+			rtp = nil
 		}
 	})
 }
 
-func (ps *Peers) getVideoMixer() *streams.VideoStreamObj {
+func (ps *Peers) getMixer() v2.Mixer {
 	ps.mutex.RLock()
 	defer ps.mutex.RUnlock()
-	return ps.videoMixer
+	return ps.mixer
 }

@@ -3,8 +3,8 @@ module github.com/lamhai1401/testrtc
 go 1.15
 
 require (
-	github.com/beowulflab/mediamixer v1.7.4
-	github.com/beowulflab/mixer-v2 v0.0.1
+	github.com/beowulflab/mixer-v2 v0.0.5-beta5
+	github.com/beowulflab/rtcbase-v2 v0.0.38
 	github.com/beowulflab/signal v1.17.6
 	github.com/davecgh/go-spew v1.1.1
 	github.com/lamhai1401/gologs v0.0.5
