@@ -254,18 +254,67 @@ func (p *Peer) initMediaEngine() *webrtc.MediaEngine {
 	// mediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
 
 	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
-		PayloadType:        98,
-	}, webrtc.RTPCodecTypeVideo); err != nil {
-		logs.Error(err)
-	}
-
-	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
 		PayloadType:        111,
 	}, webrtc.RTPCodecTypeAudio); err != nil {
-		logs.Error(err)
+		logs.Error("initMediaEngine: ", err)
 	}
+
+	// Default Pion Audio Header Extensions
+	for _, extension := range []string{
+		"urn:ietf:params:rtp-hdrext:sdes:mid",
+		"urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id",
+		"urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
+	} {
+		if err := mediaEngine.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeAudio); err != nil {
+			logs.Error("initMediaEngine: ", err)
+		}
+	}
+
+	videoRTCPFeedback := []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}, {Type: "nack", Parameter: ""}, {Type: "nack", Parameter: "pli"}}
+	for _, codec := range []webrtc.RTPCodecParameters{
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "profile-id=0", RTCPFeedback: videoRTCPFeedback},
+			PayloadType:        98,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: "apt=98", RTCPFeedback: nil},
+			PayloadType:        99,
+		},
+
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "profile-id=1", RTCPFeedback: videoRTCPFeedback},
+			PayloadType:        100,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: "apt=100", RTCPFeedback: nil},
+			PayloadType:        101,
+		},
+
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/ulpfec", ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+			PayloadType:        116,
+		},
+	} {
+		if err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
+			logs.Error("initMediaEngine: ", err)
+		}
+	}
+	// Default Pion Video Header Extensions
+	for _, extension := range []string{
+		"urn:ietf:params:rtp-hdrext:sdes:mid",
+		"urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id",
+		"urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
+	} {
+		if err := mediaEngine.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeVideo); err != nil {
+			logs.Error("initMediaEngine: ", err)
+		}
+	}
+
+	// if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
+	// 	logs.Error(err)
+	// }
+
 	return mediaEngine
 }
 

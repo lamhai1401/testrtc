@@ -29,18 +29,18 @@ func NewSDPType(raw string) webrtc.SDPType {
 
 // Peer linter
 type Peer struct {
-	sessionID         string
-	signalID          string
-	bitrate           *int
-	iceCache          *utils.AdvanceMap
-	conn              *webrtc.PeerConnection
-	localVideoTrack   *webrtc.TrackLocalStaticRTP
-	localAudioTrack   *webrtc.TrackLocalStaticRTP
-	remotelVideoTrack *webrtc.TrackRemote
-	remoteVideoTrack  *webrtc.TrackRemote
-	isConnected       bool
-	isClosed          bool
-	mutex             sync.RWMutex
+	sessionID        string
+	signalID         string
+	bitrate          *int
+	iceCache         *utils.AdvanceMap
+	conn             *webrtc.PeerConnection
+	localVideoTrack  *webrtc.TrackLocalStaticRTP
+	localAudioTrack  *webrtc.TrackLocalStaticRTP
+	remoteAudioTrack *webrtc.TrackRemote
+	remoteVideoTrack *webrtc.TrackRemote
+	isConnected      bool
+	isClosed         bool
+	mutex            sync.RWMutex
 }
 
 // NewPeer linter
@@ -62,7 +62,7 @@ func NewPeer(
 }
 
 // NewConnection linte
-func (p *Peer) NewConnection(sdp interface{}, config *webrtc.Configuration) (*webrtc.PeerConnection, error) {
+func (p *Peer) NewConnection(config *webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	api := p.addAPI()
 	conn, err := api.NewPeerConnection(*config)
 	if err != nil {
