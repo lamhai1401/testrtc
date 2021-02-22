@@ -2,6 +2,7 @@ package peer
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lamhai1401/gologs/logs"
@@ -248,16 +249,36 @@ func (p *Peer) addAPI() *webrtc.API {
 	return webrtc.NewAPI(webrtc.WithMediaEngine(p.initMediaEngine()), webrtc.WithSettingEngine(*p.initSettingEngine()))
 }
 
-func (p *Peer) initMediaEngine() *webrtc.MediaEngine {
-	mediaEngine := &webrtc.MediaEngine{}
-	// mediaEngine.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
-	// mediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
+func (p *Peer) initMediaEngineAudio(mediaEngine *webrtc.MediaEngine) error {
+	// if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+	// 	RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
+	// 	PayloadType:        111,
+	// }, webrtc.RTPCodecTypeAudio); err != nil {
+	// 	logs.Error("initMediaEngine: ", err)
+	// }
 
-	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
-		PayloadType:        111,
-	}, webrtc.RTPCodecTypeAudio); err != nil {
-		logs.Error("initMediaEngine: ", err)
+	// Default Pion Audio Codecs
+	for _, codec := range []webrtc.RTPCodecParameters{
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
+			PayloadType:        111,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypeG722, ClockRate: 8000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+			PayloadType:        9,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypePCMU, ClockRate: 8000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+			PayloadType:        0,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypePCMA, ClockRate: 8000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+			PayloadType:        8,
+		},
+	} {
+		if err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
+			return err
+		}
 	}
 
 	// Default Pion Audio Header Extensions
@@ -267,39 +288,64 @@ func (p *Peer) initMediaEngine() *webrtc.MediaEngine {
 		"urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
 	} {
 		if err := mediaEngine.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeAudio); err != nil {
-			logs.Error("initMediaEngine: ", err)
+			logs.Error("initMediaEngineAudio: ", err)
 		}
 	}
+	return nil
+}
 
+func (p *Peer) initMediaEngineVideo(codecCode int, mediaEngine *webrtc.MediaEngine) error {
+	var tmp []webrtc.RTPCodecParameters
 	videoRTCPFeedback := []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}, {Type: "nack", Parameter: ""}, {Type: "nack", Parameter: "pli"}}
-	for _, codec := range []webrtc.RTPCodecParameters{
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "profile-id=0", RTCPFeedback: videoRTCPFeedback},
-			PayloadType:        98,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: "apt=98", RTCPFeedback: nil},
-			PayloadType:        99,
-		},
 
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "profile-id=1", RTCPFeedback: videoRTCPFeedback},
-			PayloadType:        100,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: "apt=100", RTCPFeedback: nil},
-			PayloadType:        101,
-		},
+	switch strings.ToLower("vp9") {
+	case "vp8":
+		tmp = []webrtc.RTPCodecParameters{
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypeVP8, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: videoRTCPFeedback},
+				PayloadType:        webrtc.PayloadType(codecCode),
+			},
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: fmt.Sprintf("apt=%d", codecCode), RTCPFeedback: nil},
+				PayloadType:        webrtc.PayloadType(codecCode + 1),
+			},
+		}
+		break
+	default: // defaul vp9
+		tmp = []webrtc.RTPCodecParameters{
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "profile-id=0", RTCPFeedback: videoRTCPFeedback},
+				PayloadType:        webrtc.PayloadType(codecCode),
+			},
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: fmt.Sprintf("apt=%d", codecCode), RTCPFeedback: nil},
+				PayloadType:        webrtc.PayloadType(codecCode + 1),
+			},
 
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/ulpfec", ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
-			PayloadType:        116,
-		},
-	} {
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "profile-id=1", RTCPFeedback: videoRTCPFeedback},
+				PayloadType:        webrtc.PayloadType(codecCode + 2),
+			},
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: fmt.Sprintf("apt=%d", codecCode+2), RTCPFeedback: nil},
+				PayloadType:        webrtc.PayloadType(codecCode + 3),
+			},
+
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/ulpfec", ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+				PayloadType:        116,
+			},
+		}
+		break
+	}
+
+	// Default Pion Audio Codecs
+	for _, codec := range tmp {
 		if err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
 			logs.Error("initMediaEngine: ", err)
 		}
 	}
+
 	// Default Pion Video Header Extensions
 	for _, extension := range []string{
 		"urn:ietf:params:rtp-hdrext:sdes:mid",
@@ -310,10 +356,23 @@ func (p *Peer) initMediaEngine() *webrtc.MediaEngine {
 			logs.Error("initMediaEngine: ", err)
 		}
 	}
+	return nil
+}
 
-	// if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
-	// 	logs.Error(err)
-	// }
+func (p *Peer) initMediaEngine() *webrtc.MediaEngine {
+	mediaEngine := &webrtc.MediaEngine{}
+	// mediaEngine.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+	// mediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
+
+	err := p.initMediaEngineAudio(mediaEngine)
+	if err != nil {
+		logs.Error(err)
+	}
+
+	err = p.initMediaEngineVideo(98, mediaEngine)
+	if err != nil {
+		logs.Error(err)
+	}
 
 	return mediaEngine
 }
@@ -323,4 +382,16 @@ func (p *Peer) initSettingEngine() *webrtc.SettingEngine {
 	// settingEngine.SetEphemeralUDPPortRange(20000, 60000)
 	// settingEngine.SetICETimeouts(10*time.Second, 20*time.Second, 1*time.Second)
 	return settingEngine
+}
+
+func (p *Peer) setState(s string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.state = s
+}
+
+func (p *Peer) getState() string {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.state
 }

@@ -140,7 +140,7 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 
 	conn.OnICEConnectionStateChange(func(is webrtc.ICEConnectionState) {
 		state := is.String()
-		logs.Info(fmt.Sprintf("Connection %s has states %s", peer.GetSignalID(), state))
+		logs.Warn(fmt.Sprintf("Connection %s has states %s", peer.GetSignalID(), state))
 		switch state {
 		case "connected":
 			peer.SetConnected()
@@ -167,7 +167,6 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 
 	conn.OnTrack(func(remoteTrack *webrtc.TrackRemote, r *webrtc.RTPReceiver) {
 		kind := remoteTrack.Kind().String()
-		mixer := ps.getVideoMixer()
 		logs.Info(fmt.Sprintf("Has remote %s track of ID %s", kind, peer.GetSignalID()))
 
 		go peer.RapidResynchronizationRequest(remoteTrack)
@@ -179,27 +178,29 @@ func (ps *Peers) handleConnEvent(peer *peer.Peer) {
 		// register to video mixer
 		if kind == "video" {
 			// start to register index
-			index, err := mixer.AddVideo(peer.GetSignalID())
-			if err != nil {
-				logs.Error(err.Error())
-				return
-			}
+			// mixer := ps.getVideoMixer()
+			// index, err := mixer.AddVideo(peer.GetSignalID())
+			// if err != nil {
+			// 	logs.Error(err.Error())
+			// 	return
+			// }
 			for {
 				// Read RTP packets being sent to Pion
-				rtp, readErr := remoteTrack.ReadRTP()
+				rtp, _, readErr := remoteTrack.ReadRTP()
 				if readErr != nil {
 					if readErr == io.EOF {
 						return
 					}
 					panic(readErr)
 				}
-				logs.Stack(fmt.Sprintf("Push %s video data to %d chann", peer.GetSignalID(), index))
-				mixer.PushVideo(index, rtp)
+
+				// logs.Stack(fmt.Sprintf("Push %s video data to %d chann", peer.GetSignalID(), index))
+				// mixer.PushVideo(index, rtp)
 
 				// write video data
 				err := peer.AddVideoRTP(rtp)
 				if err != nil {
-					logs.Error(err)
+					logs.Error("AddVideoRTP: ", err)
 				}
 
 				rtp = nil

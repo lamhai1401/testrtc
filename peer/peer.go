@@ -38,6 +38,7 @@ type Peer struct {
 	localAudioTrack  *webrtc.TrackLocalStaticRTP
 	remoteAudioTrack *webrtc.TrackRemote
 	remoteVideoTrack *webrtc.TrackRemote
+	state            string
 	isConnected      bool
 	isClosed         bool
 	mutex            sync.RWMutex
