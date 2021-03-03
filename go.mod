@@ -3,14 +3,13 @@ module github.com/lamhai1401/testrtc
 go 1.15
 
 require (
-	github.com/beowulflab/mediamixer v1.7.15
-	github.com/beowulflab/mixer-v2 v0.0.4
-	github.com/beowulflab/signal v1.17.6
+	github.com/beowulflab/signal v1.17.10
 	github.com/davecgh/go-spew v1.1.1
 	github.com/lamhai1401/gologs v0.0.5
 	github.com/mitchellh/mapstructure v1.3.3
+	github.com/pion/interceptor v0.0.10
 	github.com/pion/rtcp v1.2.6
 	github.com/pion/rtp v1.6.2
-	github.com/pion/webrtc/v3 v3.0.0
+	github.com/pion/webrtc/v3 v3.0.12
 	github.com/segmentio/ksuid v1.0.3
 )

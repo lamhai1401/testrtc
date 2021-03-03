@@ -4,16 +4,12 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/lamhai1401/gologs/logs"
 	"github.com/lamhai1401/testrtc/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
-
-// var (
-// 	defaultAudioCodecs = uint8(webrtc.DefaultPayloadTypeOpus)
-// 	defaultVideoCodecs = uint8(webrtc.DefaultPayloadTypeVP8)
-// )
 
 // NewSDPType linter
 func NewSDPType(raw string) webrtc.SDPType {
@@ -29,28 +25,33 @@ func NewSDPType(raw string) webrtc.SDPType {
 
 // Peer linter
 type Peer struct {
+	streamID         string
+	payloadType      int    // video codecs code VP8 - 98 or VP9 - 99
+	codec            string // only video video/VP9 or video/VP8. default audio is opus
 	sessionID        string
 	signalID         string
-	bitrate          *int
-	iceCache         *utils.AdvanceMap
+	state            string
 	conn             *webrtc.PeerConnection
 	localVideoTrack  *webrtc.TrackLocalStaticRTP
 	localAudioTrack  *webrtc.TrackLocalStaticRTP
 	remoteAudioTrack *webrtc.TrackRemote
 	remoteVideoTrack *webrtc.TrackRemote
-	state            string
+	iceCache         *utils.AdvanceMap
 	isConnected      bool
 	isClosed         bool
+	bitrate          *int
 	mutex            sync.RWMutex
 }
 
 // NewPeer linter
 func NewPeer(
 	bitrate *int,
+	streamID string,
 	sessionID string,
 	signalID string,
 ) *Peer {
 	p := &Peer{
+		streamID:    streamID,
 		bitrate:     bitrate,
 		iceCache:    utils.NewAdvanceMap(),
 		sessionID:   sessionID,
@@ -59,42 +60,69 @@ func NewPeer(
 		isConnected: false,
 	}
 
+	if bitrate == nil {
+		br := 200
+		p.bitrate = &br
+	}
+
 	return p
 }
 
-// NewConnection linte
+// NewConnection linter
 func (p *Peer) NewConnection(config *webrtc.Configuration) (*webrtc.PeerConnection, error) {
-	api := p.addAPI()
+	api := p.initAPI()
+	if api == nil {
+		return nil, fmt.Errorf("webrtc api is nil")
+	}
+
 	conn, err := api.NewPeerConnection(*config)
 	if err != nil {
 		return nil, err
 	}
 	p.setConn(conn)
 
-	if err := p.createAudioTrack(p.getSignalID()); err != nil {
+	err = p.createAudioTrack(p.getStreamID())
+	if err != nil {
 		return nil, err
 	}
 
-	if err := p.createVideoTrack(p.getSignalID()); err != nil {
+	err = p.createVideoTrack(p.getStreamID())
+	if err != nil {
 		return nil, err
 	}
 
-	return conn, nil
+	return conn, err
 }
 
-// Close linter
+// Close close peer connection
 func (p *Peer) Close() {
 	if !p.checkClose() {
 		p.setClose(true)
-		p.closeConn()
+		p.setBitrate(nil)
+		if err := p.closeConn(); err != nil {
+			logs.Error(err.Error())
+		}
+		logs.Warn(fmt.Sprintf("%s_%s webrtc peer connection was closed", p.getStreamID(), p.getSessionID()))
 	}
+}
+
+// SetIsConnected linter
+func (p *Peer) SetIsConnected(states bool) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.isConnected = states
+}
+
+// IsConnected check this is init connection or retrieve
+func (p *Peer) IsConnected() bool {
+	return p.isConnected
 }
 
 // AddVideoRTP write rtp to local video track
 func (p *Peer) AddVideoRTP(packet *rtp.Packet) error {
 	track := p.getLocalVideoTrack()
 	if track == nil {
-		return fmt.Errorf("ErrNilVideoTrack")
+		return fmt.Errorf(ErrNilVideoTrack)
 	}
 	return p.writeRTP(packet, track)
 }
@@ -103,30 +131,38 @@ func (p *Peer) AddVideoRTP(packet *rtp.Packet) error {
 func (p *Peer) AddAudioRTP(packet *rtp.Packet) error {
 	track := p.getLocalAudioTrack()
 	if track == nil {
-		return fmt.Errorf("ErrNilAudioTrack")
+		return fmt.Errorf(ErrNilAudioTrack)
 	}
 	return p.writeRTP(packet, track)
 }
 
 // AddICECandidate to add candidate
 func (p *Peer) AddICECandidate(icecandidate interface{}) error {
-	var candidateInit webrtc.ICECandidateInit
-	err := mapstructure.Decode(icecandidate, &candidateInit)
-	if err != nil {
-		return err
+	// var candidateInit webrtc.ICECandidateInit
+	candidateInit, ok := icecandidate.(*webrtc.ICECandidateInit)
+	if !ok {
+		err := mapstructure.Decode(icecandidate, &candidateInit)
+		if err != nil {
+			return err
+		}
 	}
 
 	conn := p.getConn()
 	if conn == nil {
-		p.addIceCache(&candidateInit)
-		return fmt.Errorf("ErrNilPeerconnection")
+		p.addIceCache(candidateInit)
+		return fmt.Errorf(ErrNilPeerconnection)
 	}
 
 	if conn.RemoteDescription() == nil {
-		p.addIceCache(&candidateInit)
+		p.addIceCache(candidateInit)
 	}
 
-	return conn.AddICECandidate(candidateInit)
+	err := conn.AddICECandidate(*candidateInit)
+	if err != nil {
+		return err
+	}
+	logs.Info(fmt.Sprintf("Add ice candidate from %s successfully", p.GetSessionID()))
+	return nil
 }
 
 // CreateOffer add offer
@@ -178,7 +214,7 @@ func (p *Peer) CreateAnswer() error {
 func (p *Peer) AddSDP(values interface{}) error {
 	conns := p.getConn()
 	if conns == nil {
-		return fmt.Errorf("ErrNilPeerconnection")
+		return fmt.Errorf(ErrNilPeerconnection)
 	}
 
 	var data utils.SDPTemp
@@ -188,7 +224,7 @@ func (p *Peer) AddSDP(values interface{}) error {
 	}
 
 	sdp := &webrtc.SessionDescription{
-		Type: NewSDPType(data.Type),
+		Type: utils.NewSDPType(data.Type),
 		SDP:  data.SDP,
 	}
 
@@ -209,63 +245,23 @@ func (p *Peer) AddSDP(values interface{}) error {
 	return nil
 }
 
-// AddOffer add client offer and return answer
-func (p *Peer) addOffer(offer *webrtc.SessionDescription) error {
-	conn := p.getConn()
-	if conn == nil {
-		return fmt.Errorf("rtc connection is nil")
-	}
-
-	//set remote desc
-	err := conn.SetRemoteDescription(*offer)
-	if err != nil {
-		return err
-	}
-
-	err = p.setCacheIce()
-	if err != nil {
-		return err
-	}
-
-	err = p.CreateAnswer()
-	if err != nil {
-		return err
-	}
-
-	return nil
+// GetLocalDescription get current peer local description to send to client
+func (p *Peer) GetLocalDescription() (*webrtc.SessionDescription, error) {
+	return p.getLocalDescription()
 }
 
-// AddAnswer add client answer and set remote desc
-func (p *Peer) addAnswer(answer *webrtc.SessionDescription) error {
-	conn := p.getConn()
-	if conn == nil {
-		return fmt.Errorf("Peer connection is nil")
-	}
-
-	//set remote desc
-	err := conn.SetRemoteDescription(*answer)
-	if err != nil {
-		return err
-	}
-	return p.setCacheIce()
+// GetSessionID linter
+func (p *Peer) GetSessionID() string {
+	return p.getSessionID()
 }
 
-// SetConnected linter
-func (p *Peer) SetConnected() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	p.isConnected = true
-}
-
-// CheckConnected linter
-func (p *Peer) CheckConnected() bool {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	return p.isConnected
+// SetSessionID linter
+func (p *Peer) SetSessionID(s string) {
+	p.setSessionID(s)
 }
 
 // GetLocalDescription get current peer local description
-func (p *Peer) GetLocalDescription() (*webrtc.SessionDescription, error) {
+func (p *Peer) getLocalDescription() (*webrtc.SessionDescription, error) {
 	conn := p.getConn()
 	if conn == nil {
 		return nil, fmt.Errorf("rtc connection is nil")
@@ -273,17 +269,9 @@ func (p *Peer) GetLocalDescription() (*webrtc.SessionDescription, error) {
 	return conn.LocalDescription(), nil
 }
 
-// GetConn linter
-func (p *Peer) GetConn() *webrtc.PeerConnection {
-	return p.getConn()
-}
-
-// GetSignalID linter
-func (p *Peer) GetSignalID() string {
-	return p.getSignalID()
-}
-
-// GetSessionID linter
-func (p *Peer) GetSessionID() string {
-	return p.getSessionID()
+// HandleVideoTrack handle all video track
+func (p *Peer) HandleVideoTrack(remoteTrack *webrtc.TrackRemote) {
+	go p.modifyBitrate(remoteTrack)
+	go p.pictureLossIndication(remoteTrack)
+	go p.rapidResynchronizationRequest(remoteTrack)
 }

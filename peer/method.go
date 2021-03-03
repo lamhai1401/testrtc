@@ -7,39 +7,97 @@ import (
 
 	"github.com/lamhai1401/gologs/logs"
 	"github.com/lamhai1401/testrtc/utils"
+	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
 
-func (p *Peer) getLocalAudioTrack() *webrtc.TrackLocalStaticRTP {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	return p.localAudioTrack
+// NewAPI linter
+func (p *Peer) writeRTP(packet *rtp.Packet, track *webrtc.TrackLocalStaticRTP) error {
+	// packet.PayloadType = track.PayloadType()
+	// packet.SSRC = track.SSRC()
+	return track.WriteRTP(packet)
 }
 
-func (p *Peer) setLocalAudioTrack(t *webrtc.TrackLocalStaticRTP) {
+// SetBitrate linter
+func (p *Peer) setBitrate(bitrate *int) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	p.localAudioTrack = t
+	p.bitrate = bitrate
 }
 
-func (p *Peer) getLocalVideoTrack() *webrtc.TrackLocalStaticRTP {
+// InitAPI linter
+// InitAPI linter
+func (p *Peer) initAPI() *webrtc.API {
+	// init media engine
+	m := p.initMediaEngine()
+	// Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
+	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
+	// this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
+	// for each PeerConnection.
+	i := &interceptor.Registry{}
+
+	// Use the default set of Interceptors
+	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
+		logs.Error("initAPI RegisterDefaultInterceptors error: ", err.Error())
+		return nil
+	}
+
+	return webrtc.NewAPI(
+		webrtc.WithMediaEngine(m),
+		webrtc.WithInterceptorRegistry(i),
+		webrtc.WithSettingEngine(*p.initSettingEngine()))
+}
+
+func (p *Peer) initSettingEngine() *webrtc.SettingEngine {
+	settingEngine := &webrtc.SettingEngine{}
+	// settingEngine.SetTrickle(true)
+	// settingEngine.SetEphemeralUDPPortRange(20000, 60000)
+	// settingEngine.SetICETimeouts(10*time.Second, 20*time.Second, 1*time.Second)
+	return settingEngine
+}
+
+func (p *Peer) getCodecs() string {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	return p.localVideoTrack
+	return p.codec
 }
 
-func (p *Peer) setLocalVideoTrack(t *webrtc.TrackLocalStaticRTP) {
+func (p *Peer) setCodecs(c string) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	p.localVideoTrack = t
+	p.codec = c
 }
 
-func (p *Peer) getSessionID() string {
+func (p *Peer) getPayloadType() int {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	return p.sessionID
+	return p.payloadType
+}
+
+func (p *Peer) setPayloadType(c int) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.payloadType = c
+}
+
+func (p *Peer) setConn(conn *webrtc.PeerConnection) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.conn = conn
+}
+
+func (p *Peer) checkClose() bool {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.isClosed
+}
+
+func (p *Peer) setClose(state bool) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.isClosed = state
 }
 
 func (p *Peer) getBitrate() *int {
@@ -48,75 +106,27 @@ func (p *Peer) getBitrate() *int {
 	return p.bitrate
 }
 
-func (p *Peer) getSignalID() string {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	return p.signalID
-}
-
-func (p *Peer) closeConn() {
-	if conn := p.getConn(); conn != nil {
-		p.setConn(nil)
-		conn.Close()
-		conn = nil
-	}
-}
-
 func (p *Peer) getConn() *webrtc.PeerConnection {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 	return p.conn
 }
 
-func (p *Peer) setConn(c *webrtc.PeerConnection) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	p.conn = c
-}
-
-// PictureLossIndication packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
-func (p *Peer) PictureLossIndication(remoteTrack *webrtc.TrackRemote) {
-	ticker := time.NewTicker(time.Millisecond * 500)
-	for range ticker.C {
-		if p.checkClose() {
-			return
+func (p *Peer) closeConn() error {
+	if conn := p.getConn(); conn != nil {
+		p.setConn(nil)
+		err := conn.Close()
+		if err != nil {
+			return err
 		}
-
-		conn := p.getConn()
-		if conn == nil {
-			return
-		}
-
-		errSend := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}})
-		if errSend != nil {
-			logs.Error("Picture loss indication write rtcp err: ", errSend.Error())
-			// return
-		}
+		conn = nil
 	}
-}
-
-// RapidResynchronizationRequest packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
-func (p *Peer) RapidResynchronizationRequest(remoteTrack *webrtc.TrackRemote) {
-	ticker := time.NewTicker(time.Millisecond * 100)
-	for range ticker.C {
-		if p.checkClose() {
-			return
-		}
-
-		conn := p.getConn()
-		if conn == nil {
-			return
-		}
-		if routineErr := conn.WriteRTCP([]rtcp.Packet{&rtcp.RapidResynchronizationRequest{SenderSSRC: uint32(remoteTrack.SSRC()), MediaSSRC: uint32(remoteTrack.SSRC())}}); routineErr != nil {
-			logs.Error("rapidResynchronizationRequest write rtcp err: ", routineErr.Error())
-			// return
-		}
-	}
+	return nil
 }
 
 // ModifyBitrate so set bitrate when datachannel has signal
 // Use this only for video not audio track
-func (p *Peer) ModifyBitrate(remoteTrack *webrtc.TrackRemote) {
+func (p *Peer) modifyBitrate(remoteTrack *webrtc.TrackRemote) {
 	ticker := time.NewTicker(time.Millisecond * 500)
 	for range ticker.C {
 		bitrate := p.getBitrate()
@@ -140,73 +150,91 @@ func (p *Peer) ModifyBitrate(remoteTrack *webrtc.TrackRemote) {
 	}
 }
 
-func (p *Peer) checkClose() bool {
+// PictureLossIndication packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
+func (p *Peer) pictureLossIndication(remoteTrack *webrtc.TrackRemote) {
+	ticker := time.NewTicker(time.Millisecond * 500)
+	for range ticker.C {
+		if p.checkClose() {
+			return
+		}
+
+		conn := p.getConn()
+		if conn == nil {
+			return
+		}
+		errSend := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}})
+		if errSend != nil {
+			logs.Error("Picture loss indication write rtcp err: ", errSend.Error())
+			// return
+		}
+	}
+}
+
+// RapidResynchronizationRequest packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
+func (p *Peer) rapidResynchronizationRequest(remoteTrack *webrtc.TrackRemote) {
+	ticker := time.NewTicker(time.Millisecond * 100)
+	for range ticker.C {
+		if p.checkClose() {
+			return
+		}
+
+		conn := p.getConn()
+		if conn == nil {
+			return
+		}
+		if routineErr := conn.WriteRTCP([]rtcp.Packet{&rtcp.RapidResynchronizationRequest{SenderSSRC: uint32(remoteTrack.SSRC()), MediaSSRC: uint32(remoteTrack.SSRC())}}); routineErr != nil {
+			logs.Error("rapidResynchronizationRequest write rtcp err: ", routineErr.Error())
+			// return
+		}
+	}
+}
+
+func (p *Peer) getSessionID() string {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	return p.isClosed
+	return p.sessionID
 }
 
-func (p *Peer) setClose(state bool) {
+func (p *Peer) setSessionID(s string) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	p.isClosed = state
+	p.sessionID = s
 }
 
-func (p *Peer) writeRTP(packet *rtp.Packet, track *webrtc.TrackLocalStaticRTP) error {
-	// packet.PayloadType = track.PayloadType()
-	// packet.SSRC = track.SSRC()
-	// packet.Header.PayloadType = track.PayloadType()
-
-	// writeErr := track.wr(packet)
-	// if writeErr != nil && !errors.Is(writeErr, io.ErrClosedPipe) {
-	// 	panic(writeErr)
-	// }
-	return track.WriteRTP(packet)
+func (p *Peer) getStreamID() string {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.streamID
 }
 
-// CreateAudioTrack linter
-func (p *Peer) createAudioTrack(trackID string) error {
-	if conn := p.getConn(); conn != nil {
-		// localTrack, err := conn.NewTrack(codesc, rand.Uint32(), trackID, trackID)
-		// if err != nil {
-		// 	return err
-		// }
-		localTrack, err := webrtc.NewTrackLocalStaticRTP(
-			webrtc.RTPCodecCapability{MimeType: "audio/opus"},
-			fmt.Sprintf(trackID),
-			fmt.Sprintf(trackID),
-		)
-		// Add this newly created track to the PeerConnection
-		_, err = conn.AddTrack(localTrack)
-		if err != nil {
-			return err
-		}
-		p.setLocalAudioTrack(localTrack)
-		return nil
-	}
-	return fmt.Errorf("cannot create audio track because rtc connection is nil")
+func (p *Peer) setStreamID(s string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.streamID = s
 }
 
-// CreateVideoTrack linter
-func (p *Peer) createVideoTrack(trackID string) error {
-	if conn := p.getConn(); conn != nil {
-		localTrack, err := webrtc.NewTrackLocalStaticRTP(
-			webrtc.RTPCodecCapability{MimeType: "video/VP9"},
-			trackID,
-			trackID,
-		)
-		if err != nil {
-			return err
-		}
-		// Add this newly created track to the PeerConnection
-		_, err = conn.AddTrack(localTrack)
-		if err != nil {
-			return err
-		}
-		p.setLocalVideoTrack(localTrack)
-		return nil
-	}
-	return fmt.Errorf("cannot create video track because rtc connection is nil")
+func (p *Peer) getLocalAudioTrack() *webrtc.TrackLocalStaticRTP {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.localAudioTrack
+}
+
+func (p *Peer) setLocalAudioTrack(t *webrtc.TrackLocalStaticRTP) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.localAudioTrack = t
+}
+
+func (p *Peer) getLocalVideoTrack() *webrtc.TrackLocalStaticRTP {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.localVideoTrack
+}
+
+func (p *Peer) setLocalVideoTrack(t *webrtc.TrackLocalStaticRTP) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.localVideoTrack = t
 }
 
 func (p *Peer) getIceCache() *utils.AdvanceMap {
@@ -234,164 +262,100 @@ func (p *Peer) setCacheIce() error {
 
 	captureCache := cache.Capture()
 	for _, value := range captureCache {
-		ice, ok := value.(*webrtc.ICECandidateInit)
-		if ok {
-			if err := conn.AddICECandidate(*ice); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// NewAPI linter
-func (p *Peer) addAPI() *webrtc.API {
-	return webrtc.NewAPI(webrtc.WithMediaEngine(p.initMediaEngine()), webrtc.WithSettingEngine(*p.initSettingEngine()))
-}
-
-func (p *Peer) initMediaEngineAudio(mediaEngine *webrtc.MediaEngine) error {
-	// if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-	// 	RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
-	// 	PayloadType:        111,
-	// }, webrtc.RTPCodecTypeAudio); err != nil {
-	// 	logs.Error("initMediaEngine: ", err)
-	// }
-
-	// Default Pion Audio Codecs
-	for _, codec := range []webrtc.RTPCodecParameters{
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
-			PayloadType:        111,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypeG722, ClockRate: 8000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
-			PayloadType:        9,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypePCMU, ClockRate: 8000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
-			PayloadType:        0,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypePCMA, ClockRate: 8000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
-			PayloadType:        8,
-		},
-	} {
-		if err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
+		// ice, ok := value.(*webrtc.ICECandidateInit)
+		// if ok {
+		// 	if err := p.AddICECandidate(ice); err != nil {
+		// 		return err
+		// 	}
+		// }
+		if err := p.AddICECandidate(value); err != nil {
 			return err
 		}
 	}
-
-	// Default Pion Audio Header Extensions
-	for _, extension := range []string{
-		"urn:ietf:params:rtp-hdrext:sdes:mid",
-		"urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id",
-		"urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
-	} {
-		if err := mediaEngine.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeAudio); err != nil {
-			logs.Error("initMediaEngineAudio: ", err)
-		}
-	}
 	return nil
 }
 
-func (p *Peer) initMediaEngineVideo(codecCode int, mediaEngine *webrtc.MediaEngine) error {
-	var tmp []webrtc.RTPCodecParameters
-	videoRTCPFeedback := []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}, {Type: "nack", Parameter: ""}, {Type: "nack", Parameter: "pli"}}
-
-	switch strings.ToLower("vp9") {
-	case "vp8":
-		tmp = []webrtc.RTPCodecParameters{
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: MimeTypeVP8, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: videoRTCPFeedback},
-				PayloadType:        webrtc.PayloadType(codecCode),
-			},
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: fmt.Sprintf("apt=%d", codecCode), RTCPFeedback: nil},
-				PayloadType:        webrtc.PayloadType(codecCode + 1),
-			},
-		}
-		break
-	default: // defaul vp9
-		tmp = []webrtc.RTPCodecParameters{
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "profile-id=0", RTCPFeedback: videoRTCPFeedback},
-				PayloadType:        webrtc.PayloadType(codecCode),
-			},
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: fmt.Sprintf("apt=%d", codecCode), RTCPFeedback: nil},
-				PayloadType:        webrtc.PayloadType(codecCode + 1),
-			},
-
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP9", ClockRate: 90000, Channels: 0, SDPFmtpLine: "profile-id=1", RTCPFeedback: videoRTCPFeedback},
-				PayloadType:        webrtc.PayloadType(codecCode + 2),
-			},
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/rtx", ClockRate: 90000, Channels: 0, SDPFmtpLine: fmt.Sprintf("apt=%d", codecCode+2), RTCPFeedback: nil},
-				PayloadType:        webrtc.PayloadType(codecCode + 3),
-			},
-
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/ulpfec", ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
-				PayloadType:        116,
-			},
-		}
-		break
+// AddOffer add client offer and return answer
+func (p *Peer) addOffer(offer *webrtc.SessionDescription) error {
+	conn := p.getConn()
+	if conn == nil {
+		return fmt.Errorf("rtc connection is nil")
 	}
 
-	// Default Pion Audio Codecs
-	for _, codec := range tmp {
-		if err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
-			logs.Error("initMediaEngine: ", err)
-		}
+	//set remote desc
+	err := conn.SetRemoteDescription(*offer)
+	if err != nil {
+		return err
 	}
 
-	// Default Pion Video Header Extensions
-	for _, extension := range []string{
-		"urn:ietf:params:rtp-hdrext:sdes:mid",
-		"urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id",
-		"urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
-	} {
-		if err := mediaEngine.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeVideo); err != nil {
-			logs.Error("initMediaEngine: ", err)
-		}
+	err = p.setCacheIce()
+	if err != nil {
+		return err
 	}
+
+	err = p.CreateAnswer()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (p *Peer) initMediaEngine() *webrtc.MediaEngine {
-	mediaEngine := &webrtc.MediaEngine{}
-	// mediaEngine.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
-	// mediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
-
-	err := p.initMediaEngineAudio(mediaEngine)
-	if err != nil {
-		logs.Error(err)
+// AddAnswer add client answer and set remote desc
+func (p *Peer) addAnswer(answer *webrtc.SessionDescription) error {
+	conn := p.getConn()
+	if conn == nil {
+		return fmt.Errorf("Peer connection is nil")
 	}
 
-	err = p.initMediaEngineVideo(98, mediaEngine)
+	//set remote desc
+	err := conn.SetRemoteDescription(*answer)
 	if err != nil {
-		logs.Error(err)
+		return err
 	}
-
-	return mediaEngine
+	return p.setCacheIce()
 }
 
-func (p *Peer) initSettingEngine() *webrtc.SettingEngine {
-	settingEngine := &webrtc.SettingEngine{}
-	// settingEngine.SetEphemeralUDPPortRange(20000, 60000)
-	// settingEngine.SetICETimeouts(10*time.Second, 20*time.Second, 1*time.Second)
-	return settingEngine
+// CreateAudioTrack linter
+func (p *Peer) createAudioTrack(streamID string) error {
+	if conn := p.getConn(); conn != nil {
+		localTrack, err := webrtc.NewTrackLocalStaticRTP(
+			webrtc.RTPCodecCapability{MimeType: "audio/opus"},
+			fmt.Sprintf(streamID),
+			fmt.Sprintf(streamID),
+		)
+		if err != nil {
+			return err
+		}
+		// Add this newly created track to the PeerConnection
+		_, err = conn.AddTrack(localTrack)
+		if err != nil {
+			return err
+		}
+		p.setLocalAudioTrack(localTrack)
+		return nil
+	}
+	return fmt.Errorf("cannot create audio track because rtc connection is nil")
 }
 
-func (p *Peer) setState(s string) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	p.state = s
-}
-
-func (p *Peer) getState() string {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	return p.state
+// CreateVideoTrack linter
+func (p *Peer) createVideoTrack(streamID string) error {
+	if conn := p.getConn(); conn != nil {
+		localTrack, err := webrtc.NewTrackLocalStaticRTP(
+			webrtc.RTPCodecCapability{MimeType: fmt.Sprintf("video/%s", strings.ToUpper(p.getCodecs()))},
+			streamID,
+			streamID,
+		)
+		if err != nil {
+			return err
+		}
+		// Add this newly created track to the PeerConnection
+		_, err = conn.AddTrack(localTrack)
+		if err != nil {
+			return err
+		}
+		p.setLocalVideoTrack(localTrack)
+		return nil
+	}
+	return fmt.Errorf("cannot create video track because rtc connection is nil")
 }
