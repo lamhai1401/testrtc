@@ -49,7 +49,9 @@ func NewPeer(
 	streamID string,
 	sessionID string,
 	signalID string,
-) *Peer {
+	codec string,
+	payloadType int,
+) Connection {
 	p := &Peer{
 		streamID:    streamID,
 		bitrate:     bitrate,
@@ -58,6 +60,8 @@ func NewPeer(
 		signalID:    signalID,
 		isClosed:    false,
 		isConnected: false,
+		codec:       codec,
+		payloadType: payloadType,
 	}
 
 	if bitrate == nil {
@@ -68,8 +72,36 @@ func NewPeer(
 	return p
 }
 
-// NewConnection linter
-func (p *Peer) NewConnection(config *webrtc.Configuration) (*webrtc.PeerConnection, error) {
+func newPeerConnection(
+	bitrate *int,
+	streamID string,
+	role string,
+	sessionID string,
+	codec string,
+	payloadType int,
+) *Peer {
+	p := &Peer{
+		sessionID: sessionID,
+		streamID:  streamID,
+		// role:        role,
+		bitrate:     bitrate,
+		isConnected: false,
+		isClosed:    false,
+		codec:       codec,
+		payloadType: payloadType,
+		iceCache:    utils.NewAdvanceMap(),
+	}
+
+	if bitrate == nil {
+		br := 200
+		p.bitrate = &br
+	}
+	logs.Warn(fmt.Sprintf("%s_%s peer connection was created with video codec, code, bitrate (%s/%d/%d)", streamID, sessionID, codec, payloadType, *p.bitrate))
+	return p
+}
+
+// InitPeer linter
+func (p *Peer) InitPeer(config *webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	api := p.initAPI()
 	if api == nil {
 		return nil, fmt.Errorf("webrtc api is nil")

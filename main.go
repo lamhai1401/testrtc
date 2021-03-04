@@ -1,18 +1,20 @@
 package main
 
 import (
-	"os"
+	_ "net/http/pprof"
 
 	"github.com/lamhai1401/gologs/logs"
-	"github.com/lamhai1401/testrtc/peers"
 )
 
 func main() {
-	os.Setenv("MULTIPLE_URLL", "wss://signal-conference-staging.quickom.com")
-	_, err := peers.NewPeers()
+	m, err := NewPeerWorker(
+		"wss://signal-conference-staging.quickom.com",
+		"hai",
+	)
+
 	if err != nil {
 		logs.Error(err.Error())
 	}
-
+	logs.Warn(m)
 	select {}
 }

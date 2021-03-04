@@ -41,8 +41,8 @@ func (a *AdvanceMap) getItems() *sync.Map {
 }
 
 // Len return len of sync map
-func (a *AdvanceMap) Len() int {
-	return int(a.count)
+func (a *AdvanceMap) Len() int64 {
+	return *a.getCount()
 }
 
 // Set set string key with interface value
@@ -126,4 +126,20 @@ func (a *AdvanceMap) ToMap() map[string]interface{} {
 		})
 	}
 	return tempMap
+}
+
+// Geti get item with key interface
+func (a *AdvanceMap) Geti(key interface{}) (interface{}, bool) {
+	if items := a.getItems(); items != nil {
+		return items.Load(key)
+	}
+	return nil, false
+}
+
+// Seti set interface key with interface value
+func (a *AdvanceMap) Seti(key, value interface{}) {
+	if items := a.getItems(); items != nil {
+		items.Store(key, value)
+		a.increCount()
+	}
 }
