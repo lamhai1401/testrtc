@@ -142,6 +142,9 @@ func (p *Peers) handleICEConnectionState(
 			// handleAddPeer(signalID, streamID, peer.getRole(), peer.getSessionID())
 		}
 		break
+	case "failed":
+		p.RemoveConnection(peer.getStreamID())
+		break
 	case "closed":
 		sessionID := peer.getSessionID()
 		logs.Info(fmt.Sprintf("%s_%s_%s ice state is %s", signalID, streamID, peer.getSessionID(), state))
@@ -149,6 +152,7 @@ func (p *Peers) handleICEConnectionState(
 			if sessionID == peer.getSessionID() {
 				logs.Warn("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state)
 				p.RemoveConnection(peer.getStreamID())
+				// p.RemoveConnections(signalID)
 			}
 		}
 		break

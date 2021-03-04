@@ -132,6 +132,14 @@ func (m *Manager) processNotifySignal(values []interface{}) {
 			worker.RemoveConnection(signalID, streamID, sessionID)
 		}
 		break
+	case "reconnect":
+		log.Debug(fmt.Sprintf("Receive reconnect from signal peer: %s_%s_%s", signalID, streamID, sessionID))
+		err = m.handleReconnect(signalID, streamID, sessionID)
+		break
+	case "error":
+		log.Debug(fmt.Sprintf("Receive error from signal peer: %s_%s_%s", signalID, streamID, sessionID))
+		logs.Error(values)
+		break
 	default:
 		err = fmt.Errorf("receive not processing event: %s", event)
 	}
@@ -474,6 +482,6 @@ func (m *Manager) handleReconnect(signalID string, streamID string, sessionID st
 		return ErrNilSignal
 	}
 	signal.Send(signalID, streamID, sessionID, "reconnect-ok")
-	signal.Send(signalID, streamID, sessionID, "ok")
+	// signal.Send(signalID, streamID, sessionID, "ok")
 	return nil
 }
