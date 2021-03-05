@@ -1,2 +1,2 @@
-#!/bin/sh
-./testrtc
+#!/bin/bash
+./classroom-core

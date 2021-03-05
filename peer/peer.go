@@ -123,6 +123,9 @@ func (p *Peer) InitPeer(config *webrtc.Configuration) (*webrtc.PeerConnection, e
 		return nil, err
 	}
 
+	// warning rtcp report
+	go p.processRTCP(conn)
+
 	return conn, err
 }
 
@@ -306,4 +309,21 @@ func (p *Peer) HandleVideoTrack(remoteTrack *webrtc.TrackRemote) {
 	go p.modifyBitrate(remoteTrack)
 	go p.pictureLossIndication(remoteTrack)
 	go p.rapidResynchronizationRequest(remoteTrack)
+}
+
+func (p *Peer) processRTCP(peerConnection *webrtc.PeerConnection) {
+	// Read incoming RTCP packets
+	// Before these packets are retuned they are processed by interceptors. For things
+	// like NACK this needs to be called.
+	processRTCP := func(rtpSender *webrtc.RTPSender) {
+		rtcpBuf := make([]byte, 1500)
+		for {
+			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
+				return
+			}
+		}
+	}
+	for _, rtpSender := range peerConnection.GetSenders() {
+		go processRTCP(rtpSender)
+	}
 }
