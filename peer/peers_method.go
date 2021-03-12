@@ -79,17 +79,17 @@ func (p *Peers) getSignalID() string {
 	return p.signalID
 }
 
-func (p *Peers) sendCandidate(singalID string, streamID string, sessionID string, candidate *webrtc.ICECandidate) {
-	p.sendSignal(singalID, streamID, sessionID, "candidate", candidate.ToJSON())
+func (p *Peers) sendCandidate(singalID, streamID, role, sessionID string, candidate *webrtc.ICECandidate) {
+	p.sendSignal(singalID, streamID, role, sessionID, "candidate", candidate.ToJSON())
 }
 
-func (p *Peers) sendSDP(singalID string, streamID string, sessionID string, sdp interface{}) {
-	p.sendSignal(singalID, streamID, sessionID, "SDP", sdp)
-}
+// func (p *Peers) sendSDP(singalID, streamID, role, sessionID string, sdp interface{}) {
+// 	p.sendSignal(singalID, streamID, role, sessionID, "SDP", sdp)
+// }
 
-func (p *Peers) sendOK(singalID string, streamID string, sessionID string) {
-	p.sendSignal(singalID, streamID, sessionID, "ok")
-}
+// func (p *Peers) sendOK(singalID, streamID, role, sessionID string) {
+// 	p.sendSignal(singalID, streamID, role, sessionID, "ok")
+// }
 
 func (p *Peers) sendSignal(input ...interface{}) {
 	if signal := p.getSignal(); signal != nil {

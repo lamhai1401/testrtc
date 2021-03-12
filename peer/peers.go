@@ -105,7 +105,7 @@ func (p *Peers) AddConnection(
 
 	conn.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil {
-			p.sendCandidate(p.getSignalID(), streamID, peer.GetSessionID(), candidate)
+			p.sendCandidate(p.getSignalID(), streamID, role, peer.GetSessionID(), candidate)
 		}
 	})
 
