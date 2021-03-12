@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/lamhai1401/gologs/logs"
 )
@@ -52,6 +53,14 @@ func GetMixerLength() int {
 }
 
 // FormatSignalID return format signalID
-func FormatSignalID(signalID, role, sessionID string) string {
-	return fmt.Sprintf("%s_%s_%s", signalID, role, sessionID)
+func FormatStreamID(streamID, sessionID string) string {
+	return fmt.Sprintf("%s_%s", streamID, sessionID)
+}
+
+func GetStreamID(formatStreamID string) string {
+	s := strings.Split(formatStreamID, "_")
+	if len(s) <= 0 {
+		return ""
+	}
+	return s[0]
 }

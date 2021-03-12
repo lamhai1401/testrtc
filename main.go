@@ -13,6 +13,11 @@ func main() {
 		os.Getenv("USERNAME"), // "hai",
 	)
 
+	// m, err := NewPeerWorker(
+	// 	"wss://signal-conference-staging.quickom.com",
+	// 	"hai",
+	// )
+
 	if err != nil {
 		logs.Error(err.Error())
 	}

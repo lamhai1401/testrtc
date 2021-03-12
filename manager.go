@@ -83,48 +83,55 @@ func (m *Manager) processNotifySignal(values []interface{}) {
 		return
 	}
 
-	if len(values) < 4 {
-		log.Error("Len of msg < 4")
+	if len(values) < 5 {
+		log.Error(fmt.Sprintf("Len of msg < 5: %v", values))
 		return
 	}
 
 	signalID, hasSignalID := values[0].(string)
 	if !hasSignalID {
-		log.Error(fmt.Sprintf("[ProcessSignal] Invalid signal ID: %v", signalID))
+		log.Error(fmt.Sprintf("[ProcessSignal] Invalid signal ID: %v", values))
 		return
 	}
 
 	streamID, hasStreamID := values[1].(string)
 	if !hasStreamID {
-		log.Error(fmt.Sprintf("[ProcessSignal] Invalid stream ID: %v", streamID))
+		log.Error(fmt.Sprintf("[ProcessSignal] Invalid stream ID: %v", values))
 		return
 	}
 
-	sessionID, hasSessionID := values[2].(string)
+	role, isRole := values[2].(string)
+	if !isRole {
+		log.Error(fmt.Sprintf("[ProcessSignal] Invalid role: %v", values))
+		return
+	}
+
+	sessionID, hasSessionID := values[3].(string)
 	if !hasSessionID {
-		log.Error(fmt.Sprintf("[ProcessSignal] Invalid session ID: %v", sessionID))
+		log.Error(fmt.Sprintf("[ProcessSignal] Invalid session ID: %v", values))
 		return
 	}
 
-	event, isEvent := values[3].(string)
+	event, isEvent := values[4].(string)
 	if !isEvent {
-		log.Error(fmt.Sprintf("[ProcessSignal] Invalid event: %v", event))
+		log.Error(fmt.Sprintf("[ProcessSignal] Invalid event: %v", values))
 		return
 	}
 
+	// format signalID
 	var err error
 	switch event {
 	case "ok":
 		log.Debug(fmt.Sprintf("Receive ok from signal peer: %s_%s_%s", signalID, streamID, sessionID))
-		err = m.handleOkEvent(signalID, streamID, sessionID)
+		err = m.handleOkEvent(signalID, streamID, role, sessionID)
 		break
 	case "sdp":
 		log.Debug(fmt.Sprintf("Receive sdp from signal peer: %s_%s_%s", signalID, streamID, sessionID))
-		err = m.handleSDPEvent(signalID, streamID, sessionID, values[4])
+		err = m.handleSDPEvent(signalID, streamID, role, sessionID, values[5])
 		break
 	case "candidate":
 		log.Debug(fmt.Sprintf("Receive candidate from signal peer: %s_%s_%s ==> [%v]", signalID, streamID, sessionID, values[4]))
-		err = m.handCandidateEvent(signalID, streamID, sessionID, values[4])
+		err = m.handCandidateEvent(signalID, streamID, role, sessionID, values[5])
 		break
 	case "close":
 		log.Debug(fmt.Sprintf("Receive close from signal peer: %s_%s_%s", signalID, streamID, sessionID))
@@ -134,7 +141,7 @@ func (m *Manager) processNotifySignal(values []interface{}) {
 		break
 	case "reconnect":
 		log.Debug(fmt.Sprintf("Receive reconnect from signal peer: %s_%s_%s", signalID, streamID, sessionID))
-		err = m.handleReconnect(signalID, streamID, sessionID)
+		err = m.handleReconnect(signalID, streamID, role, sessionID)
 		break
 	case "error":
 		log.Debug(fmt.Sprintf("Receive error from signal peer: %s_%s_%s", signalID, streamID, sessionID))
@@ -147,12 +154,12 @@ func (m *Manager) processNotifySignal(values []interface{}) {
 	if err != nil {
 		if err.Error() == peer.ErrAddCandidate.Error() {
 			var candidateInit webrtc.ICECandidateInit
-			if err1 := mapstructure.Decode(values[4], &candidateInit); err1 == nil {
+			if err1 := mapstructure.Decode(values[5], &candidateInit); err1 == nil {
 				m.setPeerICECache(candidateInit, sessionID)
 			}
 		}
 
-		m.sendError(signalID, streamID, sessionID, err.Error())
+		m.sendError(signalID, streamID, role, sessionID, err.Error())
 		log.Error("[processNotifySignal] err: ", err.Error())
 	}
 }
@@ -229,27 +236,27 @@ func (m *Manager) getICECache() *utils.AdvanceMap {
 	return m.iceCache
 }
 
-func (m *Manager) sendError(signalID string, streamID string, sessionID string, reason string) error {
+func (m *Manager) sendError(signalID, streamID, role, sessionID, reason string) error {
 	if signal := m.getNotifySignal(); signal != nil {
-		signal.Send(signalID, streamID, sessionID, "error", reason)
+		signal.Send(signalID, streamID, role, sessionID, "error", reason)
 		return nil
 	}
 
 	return ErrNilSignal
 }
 
-func (m *Manager) sendOk(signalID string, streamID string, sessionID string) error {
+func (m *Manager) sendOk(signalID, streamID, role, sessionID string) error {
 	if signal := m.getNotifySignal(); signal != nil {
-		signal.Send(signalID, streamID, sessionID, "ok")
-		logs.Info(fmt.Sprintf("Send ok to %s_%s_%s", signalID, streamID, sessionID))
+		signal.Send(signalID, streamID, role, sessionID, "ok")
+		logs.Info(fmt.Sprintf("Send ok to %s_%s_%s_%s", signalID, streamID, role, sessionID))
 		return nil
 	}
 	return ErrNilSignal
 }
 
-func (m *Manager) sendSDP(signalID, streamID string, sessionID string, sdp interface{}) error {
+func (m *Manager) sendSDP(signalID, streamID, role, sessionID string, sdp interface{}) error {
 	if signal := m.getNotifySignal(); signal != nil {
-		signal.Send(signalID, streamID, sessionID, "sdp", sdp)
+		signal.Send(signalID, streamID, role, sessionID, "sdp", sdp)
 		log.Debug(fmt.Sprintf("==== Send sdp to: %s_%s_%s", signalID, streamID, sessionID))
 		return nil
 	}
@@ -325,8 +332,8 @@ func (m *Manager) addConnection(
 		streamID,
 		sessionID,
 		role,
-		nil, // m.handleSuccessPeer,
-		nil, // m.handleFailPeer,
+		handleAddPeer,
+		handleFailedPeer,
 		codec,
 		payloadType,
 	)
@@ -377,16 +384,16 @@ func (m *Manager) addIceCache(conn peer.Connection) {
 	}
 }
 
-func (m *Manager) handleOkEvent(signalID string, streamID string, sessionID string) error {
-	m.sendOk(signalID, streamID, sessionID)
+func (m *Manager) handleOkEvent(signalID, streamID, role, sessionID string) error {
+	m.sendOk(signalID, streamID, role, sessionID)
 	return nil
 }
 
-func (m *Manager) handleSDPEvent(signalID string, streamID string, sessionID string, sdp interface{}) error {
-	return m.addSDP(signalID, streamID, sessionID, sdp)
+func (m *Manager) handleSDPEvent(signalID, streamID, role, sessionID string, sdp interface{}) error {
+	return m.addSDP(signalID, streamID, role, sessionID, sdp)
 }
 
-func (m *Manager) addSDP(signalID string, streamID string, sessionID string, sdp interface{}) error {
+func (m *Manager) addSDP(signalID, streamID, role, sessionID string, sdp interface{}) error {
 	// dest peer
 	conns, err := m.getConnections(signalID)
 	if err != nil {
@@ -432,8 +439,8 @@ func (m *Manager) addSDP(signalID string, streamID string, sessionID string, sdp
 		signalID,
 		streamID,
 		sessionID,
-		destRole,
-		nil, // m.handleSuccessPeer,
+		role,
+		m.handleSuccessPeer,
 		nil, // m.handleFailPeer,
 		codec,
 		payloadType,
@@ -455,10 +462,10 @@ func (m *Manager) addSDP(signalID string, streamID string, sessionID string, sdp
 	}
 	// offerId := m.getOfferId(sessionID)
 	//m.setPeerConnectionState(sessionID, peeringState)
-	return m.sendSDP(signalID, streamID, sessionID, SDP)
+	return m.sendSDP(signalID, streamID, role, sessionID, SDP)
 }
 
-func (m *Manager) handCandidateEvent(signalID string, streamID string, sessionID string, value interface{}) error {
+func (m *Manager) handCandidateEvent(signalID, streamID, role, sessionID string, value interface{}) error {
 	w := m.getWorker()
 	if w == nil {
 		return ErrNilWorker
@@ -476,12 +483,55 @@ func (m *Manager) handCandidateEvent(signalID string, streamID string, sessionID
 	return err
 }
 
-func (m *Manager) handleReconnect(signalID string, streamID string, sessionID string) error {
+func (m *Manager) handleReconnect(signalID, streamID, role, sessionID string) error {
 	signal := m.getNotifySignal()
 	if signal == nil {
 		return ErrNilSignal
 	}
-	signal.Send(signalID, streamID, sessionID, "reconnect-ok")
+	signal.Send(signalID, streamID, role, sessionID, "reconnect-ok")
 	// signal.Send(signalID, streamID, sessionID, "ok")
+	return nil
+}
+
+func (m *Manager) handleSuccessPeer(signalId, streamId, role, subcriberSessionID string) {
+	// var err error
+	logs.Error(fmt.Sprintf("%s (signalID) %s (streamID) %s (sessionID) %s (role) peer success", signalId, streamId, subcriberSessionID, role))
+
+	// if conn := m.getConnection(signalId, streamId)
+
+	if role == "self" || role == "source" {
+		return
+	}
+
+	logs.Error(fmt.Sprintf("Regiter id %s (signalID) %s (streamID) %s (sessionID) %s (role)", signalId, streamId, subcriberSessionID, role))
+	if err := m.register(signalId, streamId); err != nil {
+		m.sendError(signalId, streamId, role, subcriberSessionID, err.Error())
+	}
+}
+
+// register regis source peer to des peer
+func (m *Manager) register(signalID string, streamID string) error {
+	w := m.getWorker()
+	if w == nil {
+		return ErrNilWorker
+	}
+
+	// streamID = utils.GetStreamID(streamID)
+
+	return w.Register(
+		signalID,
+		streamID,
+		func(signalID, streamID, subcriberSessionID, reason string) {
+			m.unRegister(signalID, streamID, subcriberSessionID)
+		},
+	)
+}
+
+func (m *Manager) unRegister(signalID, streamID, subcriberSessionID string) error {
+	w := m.getWorker()
+	if w == nil {
+		return ErrNilWorker
+	}
+	w.UnRegister(signalID, streamID, subcriberSessionID)
 	return nil
 }

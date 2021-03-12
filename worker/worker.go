@@ -17,15 +17,15 @@ import (
 
 // PeerWorker Set
 type PeerWorker struct {
-	bitrate int
-	id      string
-	// audioFwdm utils.Fwdm            // forward audio pkg
-	// videoFwdm utils.Fwdm            // forward video pkg
-	configs  *webrtc.Configuration // peer connection config
-	peers    *utils.AdvanceMap     // save all peers with signalID
-	signal   *signal.NotifySignal
-	isClosed bool
-	mutex    sync.RWMutex
+	bitrate   int
+	id        string
+	audioFwdm utils.Fwdm            // forward audio pkg
+	videoFwdm utils.Fwdm            // forward video pkg
+	configs   *webrtc.Configuration // peer connection config
+	peers     *utils.AdvanceMap     // save all peers with signalID
+	signal    *signal.NotifySignal
+	isClosed  bool
+	mutex     sync.RWMutex
 }
 
 // NewPeerWorker linter
@@ -35,12 +35,12 @@ func NewPeerWorker(
 	signal *signal.NotifySignal,
 ) Worker {
 	w := &PeerWorker{
-		id:      id,
-		bitrate: bitrate,
-		signal:  signal,
-		// audioFwdm: utils.NewForwarderMannager(id),
-		// videoFwdm: utils.NewForwarderMannager(id),
-		peers: utils.NewAdvanceMap(),
+		id:        id,
+		bitrate:   bitrate,
+		signal:    signal,
+		audioFwdm: utils.NewForwarderMannager(id),
+		videoFwdm: utils.NewForwarderMannager(id),
+		peers:     utils.NewAdvanceMap(),
 	}
 
 	return w
@@ -61,8 +61,8 @@ func (w *PeerWorker) AddConnections(signalID string) {
 	connections := peer.NewPeers(
 		signalID,
 		w.getSignal(),
-		nil, // w.getAudioFwdm(),
-		nil, // w.getVideoFwdm(),
+		w.getAudioFwdm(),
+		w.getVideoFwdm(),
 	)
 	if peers := w.getPeers(); peers != nil {
 		peers.Set(signalID, connections)
@@ -205,4 +205,63 @@ func (w *PeerWorker) RemoveConnection(signalID, streamID, sessionID string) erro
 // RemoveConnections remove all connections
 func (w *PeerWorker) RemoveConnections(signalID string) {
 	w.closeConnections(signalID)
+}
+
+// Register a client to fwd
+func (w *PeerWorker) Register(signalID string, streamID string, errHandler func(signalID string, streamID string, subcriberSessionID string, reason string)) error {
+	p := w.getPeer(signalID, streamID)
+	if p == nil {
+		return fmt.Errorf("Peer connection of with [%s-%s] is nil", signalID, streamID)
+	}
+
+	if videofwdm := w.getVideoFwdm(); videofwdm != nil {
+		videofwdm.Unregister(streamID, p.GetSessionID())
+		videofwdm.Register(streamID, p.GetSessionID(), func(wrapper *utils.Wrapper) error {
+			err := p.AddVideoRTP(&wrapper.Pkg)
+			if err != nil {
+				errHandler(signalID, streamID, p.GetSessionID(), err.Error())
+				return err
+			}
+			logs.Stack(fmt.Sprintf("Write %s video rtp to %s", streamID, p.GetSessionID()))
+
+			return nil
+		})
+	}
+
+	if audiofwdm := w.getAudioFwdm(); audiofwdm != nil {
+		audiofwdm.Unregister(streamID, p.GetSessionID())
+		audiofwdm.Register(streamID, p.GetSessionID(), func(wrapper *utils.Wrapper) error {
+			err := p.AddAudioRTP(&wrapper.Pkg)
+			if err != nil {
+				errHandler(signalID, streamID, p.GetSessionID(), err.Error())
+				return err
+			}
+			logs.Stack(fmt.Sprintf("Write %s audio rtp to %s", streamID, p.GetSessionID()))
+			return nil
+		})
+	}
+	return nil
+}
+
+// UnRegister linter
+func (w *PeerWorker) UnRegister(signalID string, streamID string, subcriberSessionID string) {
+	if videofwdm := w.getVideoFwdm(); videofwdm != nil {
+		videofwdm.Unregister(streamID, subcriberSessionID)
+	}
+
+	if audiofwdm := w.getAudioFwdm(); audiofwdm != nil {
+		audiofwdm.Unregister(streamID, subcriberSessionID)
+	}
+}
+
+func (w *PeerWorker) getAudioFwdm() utils.Fwdm {
+	w.mutex.RLock()
+	defer w.mutex.RUnlock()
+	return w.audioFwdm
+}
+
+func (w *PeerWorker) getVideoFwdm() utils.Fwdm {
+	w.mutex.RLock()
+	defer w.mutex.RUnlock()
+	return w.videoFwdm
 }
