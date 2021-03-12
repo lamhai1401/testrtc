@@ -359,3 +359,9 @@ func (p *Peer) createVideoTrack(streamID string) error {
 	}
 	return fmt.Errorf("cannot create video track because rtc connection is nil")
 }
+
+func (p *Peer) getRole() string {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.role
+}

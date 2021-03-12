@@ -22,9 +22,9 @@ type Worker interface {
 	// RemoveConnections(signalID string)
 	// RemoveConnectionsHasStream(streamID string) error
 	// add the method add register
-	// Register(signalID string, streamID string, errHandler func(signalID string, streamID string, subcriberSessionID string, reason string)) error
+	Register(signalID string, streamID string, errHandler func(signalID string, streamID string, subcriberSessionID string, reason string)) error
 	// add the method add register
-	// UnRegister(signalID string, streamID string, subcriberSessionID string)
+	UnRegister(signalID string, streamID string, subcriberSessionID string)
 	// checking peer connection was received data or not, return error if received data or null
 	// CheckPeerDataState(signalID, sessionID string) error
 	// GetSessionByStream(streamID string) []string

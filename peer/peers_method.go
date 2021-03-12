@@ -2,6 +2,7 @@ package peer
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/beowulflab/signal/signal-wss"
 	"github.com/lamhai1401/gologs/logs"
@@ -130,7 +131,7 @@ func (p *Peers) handleICEConnectionState(
 	}
 
 	logs.Warn(fmt.Sprintf("%s_%s_%s current ICE states is: %s", signalID, streamID, peer.getSessionID(), state))
-	// p.setState(streamID, state)
+	p.setState(streamID, state)
 
 	switch state {
 	case "connected":
@@ -139,11 +140,21 @@ func (p *Peers) handleICEConnectionState(
 			// set data state
 			// p.setPeerDataState(peer.getSessionID(), NOTYET)
 			// call peer success
-			// handleAddPeer(signalID, streamID, peer.getRole(), peer.getSessionID())
+			if handleAddPeer != nil {
+				handleAddPeer(signalID, streamID, peer.getRole(), peer.getSessionID())
+			}
 		}
 		break
 	case "failed":
-		p.RemoveConnection(peer.getStreamID())
+		go func() {
+			if err := p.checkFailedState(streamID, peer.getSessionID()); err != nil {
+				logs.Warn("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state)
+				p.RemoveConnection(peer.getStreamID())
+				if handleFailedPeer != nil {
+					handleFailedPeer(p.getSignalID(), streamID, peer.getRole(), peer.getSessionID())
+				}
+			}
+		}()
 		break
 	case "closed":
 		sessionID := peer.getSessionID()
@@ -152,7 +163,7 @@ func (p *Peers) handleICEConnectionState(
 			if sessionID == peer.getSessionID() {
 				logs.Warn("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state)
 				p.RemoveConnection(peer.getStreamID())
-				// p.RemoveConnections(signalID)
+				// p.RemoveConnections(p.getSignalID())
 			}
 		}
 		break
@@ -164,25 +175,40 @@ func (p *Peers) handleICEConnectionState(
 // handle peer remotetrack with streamID
 func (p *Peers) handleOnTrack(remoteTrack *webrtc.TrackRemote, peer *Peer) {
 	kind := remoteTrack.Kind().String()
+	var fwdm utils.Fwdm
+	var localTrack *webrtc.TrackLocalStaticRTP
+
 	logs.Debug(fmt.Sprintf("Has %s remote track of id %s_%s", kind, p.getSignalID(), peer.getStreamID()))
 	switch kind {
 	case "video":
 		peer.HandleVideoTrack(remoteTrack)
 		// peer.setRemoteVideoTrack(remoteTrack)
-		// fwdm = p.getVideoFwdm()
-		go p.pushToFwd(remoteTrack, peer.getLocalVideoTrack(), peer)
+		fwdm = p.getVideoFwdm()
+		localTrack = peer.getLocalVideoTrack()
 		break
 	case "audio":
 		// peer.setRemoteAudioTrack(remoteTrack)
-		// fwdm = p.getAudioFwdm()
-		go p.pushToFwd(remoteTrack, peer.getLocalAudioTrack(), peer)
+		fwdm = p.getAudioFwdm()
+		localTrack = peer.getLocalAudioTrack()
 		break
 	default:
 		return
 	}
+
+	switch peer.getRole() {
+	case "self":
+		go p.pushBack(remoteTrack, localTrack, peer)
+		break
+	case "source":
+		go p.pushToFwd(fwdm, remoteTrack, peer.getStreamID(), kind, peer)
+		break
+	default:
+		logs.Info(fmt.Sprintf("Current %s track has role %s. Not is source/self role. No need to read RTP", kind, peer.getRole()))
+		return
+	}
 }
 
-func (p *Peers) pushToFwd(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.TrackLocalStaticRTP, peer *Peer) {
+func (p *Peers) pushToFwd(fwdm utils.Fwdm, remoteTrack *webrtc.TrackRemote, streamID, kind string, peer *Peer) {
 	var rtp *rtp.Packet
 	var err error
 
@@ -195,17 +221,120 @@ func (p *Peers) pushToFwd(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.Tr
 			continue
 		}
 
-		if localTrack == nil {
-			logs.Warn("Local track is nil")
-			return
+		// push video to fwd
+		fwd := fwdm.GetForwarder(streamID)
+		if fwd == nil {
+			fwd = fwdm.AddNewForwarder(streamID)
 		}
-		if err := localTrack.WriteRTP(rtp); err != nil {
-			logs.Error(err.Error())
+		if fwd != nil {
+			fwd.Push(&utils.Wrapper{
+				Pkg: *rtp,
+			})
+			logs.Stack(fmt.Sprintf("Push %s rtp pkg to fwd %s", kind, streamID))
 		}
 
-		logs.Stack(fmt.Sprintf("Push %s rtp pkg to localTrack %s", remoteTrack.Kind().String(), peer.getSessionID()))
 		rtp = nil
 		err = nil
-		// fwd = nil
+		fwd = nil
 	}
+}
+
+func (p *Peers) pushBack(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.TrackLocalStaticRTP, peer *Peer) {
+	var rtp *rtp.Packet
+	var err error
+
+	for {
+		rtp, _, err = remoteTrack.ReadRTP()
+		if err != nil {
+			if peer.checkClose() {
+				return
+			}
+			continue
+		}
+
+		if localTrack != nil {
+			if err := localTrack.WriteRTP(rtp); err != nil {
+				logs.Error(err.Error())
+				return
+			}
+		}
+
+		rtp = nil
+		err = nil
+	}
+}
+
+func (p *Peers) checkFailedState(streamID, sessionID string) error {
+	time.Sleep(10 * time.Second)
+	state := p.getState(streamID)
+	peer := p.GetConnection(streamID)
+	if peer == nil {
+		return nil
+	}
+	if (state == "failed" || state == "disconnected" || state == "closed") && sessionID == peer.GetSessionID() {
+		str := fmt.Sprintf("%s state still %s after 10s", streamID, state)
+		logs.Error(str)
+		return fmt.Errorf(str)
+	}
+	return nil
+}
+
+func (p *Peers) getState(streamID string) string {
+	if states := p.getStates(); states != nil {
+		state, has := states.Get(streamID)
+		if !has {
+			return ""
+		}
+		s, ok := state.(string)
+		if ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func (p *Peers) getStates() *utils.AdvanceMap {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.states
+}
+
+func (p *Peers) deleteState(streamID string) {
+	if states := p.getStates(); states != nil {
+		states.Delete(streamID)
+	}
+}
+
+// exportStates iter state and export into a map string
+func (p *Peers) exportStates() map[string]string {
+	temp := make(map[string]string, 0)
+	if states := p.getStates(); states != nil {
+		states.Iter(func(key, value interface{}) bool {
+			k, ok1 := key.(string)
+			v, ok2 := value.(string)
+			if ok1 && ok2 {
+				temp[k] = v
+			}
+			return true
+		})
+	}
+	return temp
+}
+
+func (p *Peers) setState(streamID string, state string) {
+	if states := p.getStates(); states != nil {
+		states.Set(streamID, state)
+	}
+}
+
+func (p *Peers) getAudioFwdm() utils.Fwdm {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.audioFwdm
+}
+
+func (p *Peers) getVideoFwdm() utils.Fwdm {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.videoFwdm
 }

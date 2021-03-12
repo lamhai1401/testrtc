@@ -7,7 +7,7 @@ import (
 
 // Connection interface
 type Connection interface {
-	// GetRole() string
+	GetRole() string
 	GetSessionID() string  // for handle ice restart
 	SetSessionID(s string) // for handle ice restart
 	HandleVideoTrack(remoteTrack *webrtc.TrackRemote)
@@ -47,8 +47,8 @@ type Connections interface {
 	)
 	GetConnection(streamID string) Connection
 	// RemoveConnections()
-	// GetStates() map[string]string    // get all connection states
-	// GetState(streamID string) string // get single connection state
+	GetStates() map[string]string    // get all connection states
+	GetState(streamID string) string // get single connection state
 	AddCandidate(streamID string, value interface{}) error
 	AddSDP(stream string, values interface{}) error
 	// SetPeerDataState(sessionID, state string)

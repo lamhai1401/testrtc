@@ -25,6 +25,7 @@ func NewSDPType(raw string) webrtc.SDPType {
 
 // Peer linter
 type Peer struct {
+	role             string
 	streamID         string
 	payloadType      int    // video codecs code VP8 - 98 or VP9 - 99
 	codec            string // only video video/VP9 or video/VP8. default audio is opus
@@ -51,8 +52,10 @@ func NewPeer(
 	signalID string,
 	codec string,
 	payloadType int,
+	role string,
 ) Connection {
 	p := &Peer{
+		role:        role,
 		streamID:    streamID,
 		bitrate:     bitrate,
 		iceCache:    utils.NewAdvanceMap(),
@@ -81,9 +84,9 @@ func newPeerConnection(
 	payloadType int,
 ) *Peer {
 	p := &Peer{
-		sessionID: sessionID,
-		streamID:  streamID,
-		// role:        role,
+		sessionID:   sessionID,
+		streamID:    streamID,
+		role:        role,
 		bitrate:     bitrate,
 		isConnected: false,
 		isClosed:    false,
@@ -326,4 +329,9 @@ func (p *Peer) processRTCP(peerConnection *webrtc.PeerConnection) {
 	for _, rtpSender := range peerConnection.GetSenders() {
 		go processRTCP(rtpSender)
 	}
+}
+
+// GetRole linter
+func (p *Peer) GetRole() string {
+	return p.getRole()
 }

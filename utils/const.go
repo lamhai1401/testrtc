@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
@@ -48,4 +49,9 @@ func GetMixerLength() int {
 	}
 
 	return level
+}
+
+// FormatSignalID return format signalID
+func FormatSignalID(signalID, role, sessionID string) string {
+	return fmt.Sprintf("%s_%s_%s", signalID, role, sessionID)
 }

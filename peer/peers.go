@@ -12,11 +12,14 @@ import (
 
 // Peers handle mutilpe peer connection
 type Peers struct {
-	signalID string
-	peers    *utils.AdvanceMap    // save streamID - peer
-	signal   *signal.NotifySignal // send data signal (sdp, candidate, etc...)
-	isClosed bool
-	mutex    sync.RWMutex
+	audioFwdm utils.Fwdm        // forward audio pkg
+	videoFwdm utils.Fwdm        // forward video pkg
+	states    *utils.AdvanceMap // save all client state string-string
+	signalID  string
+	peers     *utils.AdvanceMap    // save streamID - peer
+	signal    *signal.NotifySignal // send data signal (sdp, candidate, etc...)
+	isClosed  bool
+	mutex     sync.RWMutex
 }
 
 // NewPeers mutilpe peer controller
@@ -27,10 +30,13 @@ func NewPeers(
 	videoFwdm utils.Fwdm,
 ) Connections {
 	ps := &Peers{
-		signalID: signalID,
-		peers:    utils.NewAdvanceMap(),
-		signal:   signal,
-		isClosed: false,
+		signalID:  signalID,
+		peers:     utils.NewAdvanceMap(),
+		signal:    signal,
+		isClosed:  false,
+		states:    utils.NewAdvanceMap(),
+		audioFwdm: audioFwdm,
+		videoFwdm: videoFwdm,
 	}
 
 	// ps.serve()
@@ -49,7 +55,7 @@ func (p *Peers) Close() {
 // RemoveConnection remove existing connection
 func (p *Peers) RemoveConnection(streamID string) {
 	p.closePeer(streamID)
-	// p.deleteState(streamID)
+	p.deleteState(streamID)
 	// p.deleteDatachannel(streamID)
 	// p.deletePeerICECache(streamID)
 }
@@ -174,4 +180,14 @@ func (p *Peers) GetAllConnection() []Connection {
 func (p *Peers) GetAllStreamID() []string {
 	_, tmp := p.getAllPeer()
 	return tmp
+}
+
+// GetState return a single peer connection state
+func (p *Peers) GetState(streamID string) string {
+	return p.getState(streamID)
+}
+
+// GetStates return all connection state
+func (p *Peers) GetStates() map[string]string {
+	return p.exportStates()
 }
