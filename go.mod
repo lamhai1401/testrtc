@@ -3,7 +3,7 @@ module github.com/lamhai1401/testrtc
 go 1.15
 
 require (
-	github.com/beowulflab/signal v1.17.12
+	github.com/beowulflab/signal v1.17.13
 	github.com/davecgh/go-spew v1.1.1
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/lamhai1401/gologs v0.0.5

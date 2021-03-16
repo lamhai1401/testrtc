@@ -15,8 +15,8 @@ github.com/beowulflab/mediamixer v1.6.8/go.mod h1:YIPt9SNOxZMGi17D6oRq28PbgtZqap
 github.com/beowulflab/rtcbase v1.2.3/go.mod h1:mt9DfDItyXwNrNFVvogDCwl87SIftmXwtmWIHVNo2+Y=
 github.com/beowulflab/rtcbase-v2 v0.0.19/go.mod h1:h7Mg+Yr8oysPP5MSsVkhOmNw9Q2UJ1IpX56GAVOyHpw=
 github.com/beowulflab/signal v1.17.6/go.mod h1:skFahiDq655AK1CcrrHCkYuE6UV8W10GyRN5jby+zlo=
-github.com/beowulflab/signal v1.17.12 h1:2bxwYhtfApAb4bWU7n+FGBGjA+Qz/aZSWdqS/hfPKsA=
-github.com/beowulflab/signal v1.17.12/go.mod h1:c+81npbMVwilzyTc/sGJn1+BoJki+lS9Jx6fS8oQK8U=
+github.com/beowulflab/signal v1.17.13 h1:Q6TNWEm8t4+guGk8CvCxEZmxSKnQMAdx6Wb7xy5wstY=
+github.com/beowulflab/signal v1.17.13/go.mod h1:c+81npbMVwilzyTc/sGJn1+BoJki+lS9Jx6fS8oQK8U=
 github.com/bradfitz/go-smtpd v0.0.0-20170404230938-deb6d6237625/go.mod h1:HYsPBTaaSFSlLx/70C2HPIMNZpVV8+vt/A+FMnYP11g=
 github.com/buger/jsonparser v0.0.0-20181115193947-bf1c66bbce23/go.mod h1:bbYlZJ7hK1yFx9hf58LP0zeX7UjIGs20ufpu3evjr+s=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
