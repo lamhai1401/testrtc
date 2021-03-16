@@ -148,7 +148,7 @@ func (p *Peers) handleICEConnectionState(
 	case "failed":
 		go func() {
 			if err := p.checkFailedState(streamID, peer.getSessionID()); err != nil {
-				logs.Warn("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state)
+				logs.Warn(fmt.Sprintf("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state))
 				p.RemoveConnection(peer.getStreamID())
 				if handleFailedPeer != nil {
 					handleFailedPeer(p.getSignalID(), streamID, peer.getRole(), peer.getSessionID())
@@ -161,7 +161,7 @@ func (p *Peers) handleICEConnectionState(
 		logs.Info(fmt.Sprintf("%s_%s_%s ice state is %s", signalID, streamID, peer.getSessionID(), state))
 		if conn := p.GetConnection(streamID); conn != nil {
 			if sessionID == peer.getSessionID() {
-				logs.Warn("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state)
+				logs.Warn(fmt.Sprintf("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state))
 				p.RemoveConnection(peer.getStreamID())
 				// p.RemoveConnections(p.getSignalID())
 			}

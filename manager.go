@@ -180,19 +180,19 @@ func (m *Manager) processPing(values []interface{}) {
 	// [<fromId>,”process-mgr”,”ping”]
 	fromID, hasFromID := values[0].(string)
 	if !hasFromID {
-		log.Error(fmt.Sprintf("[processPing] Invalid fromID: %v", fromID))
+		log.Error(fmt.Sprintf("[processPing] Invalid fromID: %v", values))
 		return
 	}
 
 	event, hasEvent := values[1].(string)
 	if !hasEvent {
-		log.Error(fmt.Sprintf("[processPing] Invalid event: %v", event))
+		log.Error(fmt.Sprintf("[processPing] Invalid event: %v", values))
 		return
 	}
 
 	ping, hasPing := values[2].(string)
 	if !hasPing {
-		log.Error(fmt.Sprintf("[processPing] Invalid ping: %v", ping))
+		log.Error(fmt.Sprintf("[processPing] Invalid ping: %v", values))
 		return
 	}
 
@@ -385,6 +385,8 @@ func (m *Manager) addIceCache(conn peer.Connection) {
 }
 
 func (m *Manager) handleOkEvent(signalID, streamID, role, sessionID string) error {
+	// remove candidate in cache
+	m.removePeerICECacheWithID(sessionID)
 	m.sendOk(signalID, streamID, role, sessionID)
 	return nil
 }
@@ -520,6 +522,8 @@ func (m *Manager) handleSuccessPeer(signalId, streamId, role, subcriberSessionID
 	if err := m.register(signalId, streamId); err != nil {
 		m.sendError(signalId, streamId, role, subcriberSessionID, err.Error())
 	}
+
+	m.removePeerICECacheWithID(subcriberSessionID)
 }
 
 // register regis source peer to des peer
@@ -547,4 +551,18 @@ func (m *Manager) unRegister(signalID, streamID, subcriberSessionID string) erro
 	}
 	w.UnRegister(signalID, streamID, subcriberSessionID)
 	return nil
+}
+
+func (m *Manager) removePeerICECacheWithID(peerConnectionID string) {
+	if caches := m.getICECache(); caches != nil {
+		caches.Iter(func(key, value interface{}) bool {
+			values, ok := value.(string)
+			if ok {
+				if values == peerConnectionID {
+					m.removePeerICECache(key)
+				}
+			}
+			return true
+		})
+	}
 }

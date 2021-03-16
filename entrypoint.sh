@@ -1,2 +1,2 @@
 #!/bin/bash
-./classroom-core
+./classroom-core > logs_1.log
