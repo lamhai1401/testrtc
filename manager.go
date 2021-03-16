@@ -475,7 +475,20 @@ func (m *Manager) handCandidateEvent(signalID, streamID, role, sessionID string,
 		return fmt.Errorf("Connections with id %s is nil", signalID)
 	}
 
-	err := connections.AddCandidate(streamID, value)
+	// destrucre candidate
+	candidateInit, ok := value.(*webrtc.ICECandidateInit)
+	if !ok {
+		err := mapstructure.Decode(value, &candidateInit)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := connections.AddCandidate(streamID, candidateInit)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("RECEIVE CANDIDATE TOO SOON: %v", candidateInit))
+		m.setPeerICECache(candidateInit, sessionID)
+	}
 
 	if conn := connections.GetConnection(streamID); conn != nil {
 		m.addIceCache(conn)
