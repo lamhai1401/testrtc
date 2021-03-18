@@ -145,17 +145,17 @@ func (p *Peers) handleICEConnectionState(
 			}
 		}
 		break
-	case "failed":
-		go func() {
-			if err := p.checkFailedState(streamID, peer.getSessionID()); err != nil {
-				logs.Warn(fmt.Sprintf("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state))
-				p.RemoveConnection(peer.getStreamID())
-				if handleFailedPeer != nil {
-					handleFailedPeer(p.getSignalID(), streamID, peer.getRole(), peer.getSessionID())
-				}
-			}
-		}()
-		break
+	// case "failed":
+	// 	go func() {
+	// 		if err := p.checkFailedState(streamID, peer.getSessionID()); err != nil {
+	// 			logs.Warn(fmt.Sprintf("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state))
+	// 			p.RemoveConnection(peer.getStreamID())
+	// 			if handleFailedPeer != nil {
+	// 				handleFailedPeer(p.getSignalID(), streamID, peer.getRole(), peer.getSessionID())
+	// 			}
+	// 		}
+	// 	}()
+	// 	break
 	case "closed":
 		sessionID := peer.getSessionID()
 		logs.Info(fmt.Sprintf("%s_%s_%s ice state is %s", signalID, streamID, peer.getSessionID(), state))
@@ -178,6 +178,9 @@ func (p *Peers) handleOnTrack(remoteTrack *webrtc.TrackRemote, peer *Peer) {
 	var fwdm utils.Fwdm
 	var localTrack *webrtc.TrackLocalStaticRTP
 
+	logs.Warn("Remote track STREAMID: ====[ ", remoteTrack.StreamID(), " ]====")
+	logs.Warn("Remote track ID: ====[ ", remoteTrack.ID(), " ]====")
+	logs.Warn("Remote track RID: ====[ ", remoteTrack.RID(), " ]====")
 	logs.Debug(fmt.Sprintf("Has %s remote track of id %s_%s", kind, p.getSignalID(), peer.getStreamID()))
 	switch kind {
 	case "video":
