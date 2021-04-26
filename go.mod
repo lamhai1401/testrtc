@@ -3,6 +3,7 @@ module github.com/lamhai1401/testrtc
 go 1.16
 
 require (
+	github.com/beowulflab/rtcbase-v2 v0.0.19
 	github.com/beowulflab/signal v1.17.13
 	github.com/davecgh/go-spew v1.1.1
 	github.com/lamhai1401/gologs v0.0.5
@@ -11,6 +12,6 @@ require (
 	github.com/pion/interceptor v0.0.12
 	github.com/pion/rtcp v1.2.6
 	github.com/pion/rtp v1.6.2
-	github.com/pion/webrtc/v3 v3.0.22
+	github.com/pion/webrtc/v3 v3.0.26
 	github.com/segmentio/ksuid v1.0.3
 )
