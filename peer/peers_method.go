@@ -66,6 +66,14 @@ func (p *Peers) setPeer(streamID string, c *Peer) {
 func (p *Peers) closePeer(streamID string) {
 	if client := p.getPeer(streamID); client != nil {
 		p.deletePeer(streamID)
+
+		// remove from fwdm
+		if fwdm := p.getVideoFwdm(); fwdm != nil {
+			fwdm.Unregister(streamID, client.getSessionID())
+		}
+		if fwdm := p.getAudioFwdm(); fwdm != nil {
+			fwdm.Unregister(streamID, client.getSessionID())
+		}
 		// close peer
 		client.Close()
 		logs.Info(fmt.Sprintf("%s_%s_%s peer connection was removed", p.getSignalID(), streamID, client.getSessionID()))
@@ -145,17 +153,17 @@ func (p *Peers) handleICEConnectionState(
 			}
 		}
 		break
-	// case "failed":
-	// 	go func() {
-	// 		if err := p.checkFailedState(streamID, peer.getSessionID()); err != nil {
-	// 			logs.Warn(fmt.Sprintf("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state))
-	// 			p.RemoveConnection(peer.getStreamID())
-	// 			if handleFailedPeer != nil {
-	// 				handleFailedPeer(p.getSignalID(), streamID, peer.getRole(), peer.getSessionID())
-	// 			}
-	// 		}
-	// 	}()
-	// 	break
+	case "failed":
+		go func() {
+			if err := p.checkFailedState(streamID, peer.getSessionID()); err != nil {
+				logs.Warn(fmt.Sprintf("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state))
+				p.RemoveConnection(peer.getStreamID())
+				if handleFailedPeer != nil {
+					handleFailedPeer(p.getSignalID(), streamID, peer.getRole(), peer.getSessionID())
+				}
+			}
+		}()
+		break
 	case "closed":
 		sessionID := peer.getSessionID()
 		logs.Info(fmt.Sprintf("%s_%s_%s ice state is %s", signalID, streamID, peer.getSessionID(), state))
@@ -211,12 +219,20 @@ func (p *Peers) handleOnTrack(remoteTrack *webrtc.TrackRemote, peer *Peer) {
 	}
 }
 
+var lastVideoHeader *rtp.Header
+var lastVideoSequenceNumber uint16
+
+var lastAudioHeader *rtp.Header
+var lastAudioSequenceNumber uint16
+
+var lastTimestamp uint32
+
 func (p *Peers) pushToFwd(fwdm utils.Fwdm, remoteTrack *webrtc.TrackRemote, streamID, kind string, peer *Peer) {
-	var rtp *rtp.Packet
+	var pkg *rtp.Packet
 	var err error
 
 	for {
-		rtp, _, err = remoteTrack.ReadRTP()
+		pkg, _, err = remoteTrack.ReadRTP()
 		if err != nil {
 			if peer.checkClose() {
 				return
@@ -224,22 +240,104 @@ func (p *Peers) pushToFwd(fwdm utils.Fwdm, remoteTrack *webrtc.TrackRemote, stre
 			continue
 		}
 
+		if kind == "video" {
+			// Change the timestamp to only be the delta
+			oldTimestamp := pkg.Timestamp
+			if lastTimestamp == 0 {
+				pkg.Timestamp = 0
+			} else {
+				pkg.Timestamp -= lastTimestamp
+			}
+			lastTimestamp = oldTimestamp
+
+			if lastVideoHeader == nil {
+				lastVideoHeader = &pkg.Header
+				// lastTimestamp = pkg.Timestamp
+				// lastVideoHeader.Timestamp = pkg.Timestamp
+			}
+		}
+
+		if kind == "audio" && lastAudioHeader == nil {
+			lastAudioHeader = &pkg.Header
+			// lastAudioHeader.Timestamp = pkg.Timestamp
+		}
+
+		// if lastSequenceNumber == 0 {
+		// 	lastSequenceNumber = lastHeader.SequenceNumber
+		// }
+
 		// push video to fwd
 		fwd := fwdm.GetForwarder(streamID)
 		if fwd == nil {
 			fwd = fwdm.AddNewForwarder(streamID)
 		}
+
 		if fwd != nil {
-			fwd.Push(&utils.Wrapper{
-				Pkg: *rtp,
-			})
+			if kind == "video" {
+				fwd.Push(&utils.Wrapper{
+					Pkg: *p.formatVideoData(pkg),
+				})
+			} else {
+				fwd.Push(&utils.Wrapper{
+					Pkg: *p.formatAudioData(pkg),
+				})
+			}
 			logs.Stack(fmt.Sprintf("Push %s rtp pkg to fwd %s", kind, streamID))
+
+			// if kind == "video" {
+			// 	spew.Dump(data.Header)
+			// }
 		}
 
-		rtp = nil
+		pkg = nil
 		err = nil
 		fwd = nil
 	}
+}
+
+var currTimestamp uint32
+
+func (p *Peers) formatVideoData(data *rtp.Packet) *rtp.Packet {
+	currTimestamp += data.Timestamp
+	data.Timestamp = currTimestamp
+	if lastVideoSequenceNumber == 0 {
+		lastVideoSequenceNumber = data.SequenceNumber
+		return data
+	}
+
+	data.SequenceNumber = lastVideoSequenceNumber + 1
+	// if math.Abs(float64(data.SequenceNumber)-float64(lastVideoSequenceNumber)) > 1 {
+	// 	data.SequenceNumber = lastVideoSequenceNumber + 1
+	// }
+	lastVideoSequenceNumber = data.SequenceNumber
+	data.PayloadOffset = lastVideoHeader.PayloadOffset
+	// data.Timestamp = lastTimestamp
+
+	data.Extension = lastVideoHeader.Extension
+	data.ExtensionProfile = lastVideoHeader.ExtensionProfile
+	data.Extensions = lastVideoHeader.Extensions
+	return data
+}
+
+func (p *Peers) formatAudioData(data *rtp.Packet) *rtp.Packet {
+	if lastAudioSequenceNumber == 0 {
+		lastAudioSequenceNumber = data.SequenceNumber
+		return data
+	}
+
+	data.SequenceNumber = lastAudioSequenceNumber + 1
+
+	// if math.Abs(float64(data.SequenceNumber)-float64(lastAudioSequenceNumber)) > 1 {
+	// 	data.SequenceNumber = lastAudioSequenceNumber + 1
+	// }
+	lastAudioSequenceNumber = data.SequenceNumber
+	data.PayloadOffset = lastAudioHeader.PayloadOffset
+	data.SSRC = lastAudioHeader.SSRC
+	// data.Timestamp = lastVideoHeader.Timestamp
+	// data.Extension = lastAudioHeader.Extension
+	// data.ExtensionProfile = lastAudioHeader.ExtensionProfile
+	// data.Extensions = lastAudioHeader.Extensions
+	return data
 }
 
 func (p *Peers) pushBack(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.TrackLocalStaticRTP, peer *Peer) {

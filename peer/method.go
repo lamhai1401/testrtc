@@ -162,7 +162,11 @@ func (p *Peer) pictureLossIndication(remoteTrack *webrtc.TrackRemote) {
 		if conn == nil {
 			return
 		}
-		errSend := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}})
+		errSend := conn.WriteRTCP([]rtcp.Packet{
+			&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())},
+			&rtcp.SliceLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())},
+			&rtcp.RapidResynchronizationRequest{SenderSSRC: uint32(remoteTrack.SSRC()), MediaSSRC: uint32(remoteTrack.SSRC())},
+		})
 		if errSend != nil {
 			logs.Error("Picture loss indication write rtcp err: ", errSend.Error())
 			// return
@@ -172,7 +176,7 @@ func (p *Peer) pictureLossIndication(remoteTrack *webrtc.TrackRemote) {
 
 // RapidResynchronizationRequest packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
 func (p *Peer) rapidResynchronizationRequest(remoteTrack *webrtc.TrackRemote) {
-	ticker := time.NewTicker(time.Millisecond * 100)
+	ticker := time.NewTicker(time.Millisecond * 500)
 	for range ticker.C {
 		if p.checkClose() {
 			return
@@ -321,8 +325,8 @@ func (p *Peer) createAudioTrack(streamID string) error {
 	if conn := p.getConn(); conn != nil {
 		localTrack, err := webrtc.NewTrackLocalStaticRTP(
 			webrtc.RTPCodecCapability{MimeType: "audio/opus"},
-			fmt.Sprintf(streamID),
-			fmt.Sprintf(streamID),
+			"audio1", // fmt.Sprintf(streamID),
+			streamID+"audio1",
 		)
 		if err != nil {
 			return err
@@ -343,8 +347,8 @@ func (p *Peer) createVideoTrack(streamID string) error {
 	if conn := p.getConn(); conn != nil {
 		localTrack, err := webrtc.NewTrackLocalStaticRTP(
 			webrtc.RTPCodecCapability{MimeType: fmt.Sprintf("video/%s", strings.ToUpper(p.getCodecs()))},
-			streamID,
-			streamID,
+			"video1",
+			streamID+"video1",
 		)
 		if err != nil {
 			return err
@@ -356,6 +360,8 @@ func (p *Peer) createVideoTrack(streamID string) error {
 		}
 		p.setLocalVideoTrack(localTrack)
 		return nil
+
+		// conn.
 	}
 	return fmt.Errorf("cannot create video track because rtc connection is nil")
 }

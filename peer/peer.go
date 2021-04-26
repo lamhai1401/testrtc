@@ -311,7 +311,7 @@ func (p *Peer) getLocalDescription() (*webrtc.SessionDescription, error) {
 func (p *Peer) HandleVideoTrack(remoteTrack *webrtc.TrackRemote) {
 	go p.modifyBitrate(remoteTrack)
 	go p.pictureLossIndication(remoteTrack)
-	go p.rapidResynchronizationRequest(remoteTrack)
+	// go p.rapidResynchronizationRequest(remoteTrack)
 }
 
 func (p *Peer) processRTCP(peerConnection *webrtc.PeerConnection) {

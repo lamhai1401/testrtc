@@ -3,7 +3,6 @@ package utils
 import (
 	"fmt"
 
-	"github.com/lamhai1401/gologs/logs"
 	log "github.com/lamhai1401/gologs/logs"
 )
 
@@ -149,7 +148,7 @@ func (f *Forwarder) serve() {
 				f.close()
 				return
 			default:
-				logs.Info("Nothing to do with this action: ", *action.action)
+				log.Info("Nothing to do with this action: ", *action.action)
 			}
 		}
 	}()

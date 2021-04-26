@@ -84,7 +84,6 @@ func (p *Peer) initMediaEngineVideo(codecCode int, mediaEngine *webrtc.MediaEngi
 				PayloadType:        webrtc.PayloadType(codecCode + 1),
 			},
 		}
-		break
 	default: // defaul vp9
 		tmp = []webrtc.RTPCodecParameters{
 			{
@@ -110,7 +109,6 @@ func (p *Peer) initMediaEngineVideo(codecCode int, mediaEngine *webrtc.MediaEngi
 				PayloadType:        116,
 			},
 		}
-		break
 	}
 
 	// Default Pion Audio Codecs

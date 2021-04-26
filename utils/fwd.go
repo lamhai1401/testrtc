@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/lamhai1401/gologs/logs"
 	log "github.com/lamhai1401/gologs/logs"
 	"github.com/pion/rtp"
 )
@@ -103,14 +102,17 @@ func (f *Forwarder) collectData(clientID string) {
 	var err error
 	chann := f.getData(clientID)
 
+	var w Wrapper
+	var open bool
+
 	for {
 		if f.checkClose() {
 			f.info("fwd was closed")
 			return
 		}
-		w, open := <-chann
+		w, open = <-chann
 		if !open {
-			// fmt.Println("out collectData")
+			fmt.Println("out collectData")
 			return
 		}
 
@@ -173,9 +175,13 @@ func (f *Forwarder) getData(clientID string) <-chan Wrapper {
 		var w *Wrapper
 		var open bool
 		for {
+			if f.checkClose() {
+				log.Info(fmt.Sprintf("[checkClose] %s channel was closed", clientID))
+				return
+			}
 			w, open = <-chann
 			if !open {
-				logs.Info(fmt.Sprintf("%s channel was closed", clientID))
+				log.Info(fmt.Sprintf("%s channel was closed", clientID))
 				return
 			}
 			c <- *w

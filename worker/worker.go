@@ -223,7 +223,7 @@ func (w *PeerWorker) Register(signalID string, streamID string, errHandler func(
 				return err
 			}
 			logs.Stack(fmt.Sprintf("Write %s video rtp to %s", streamID, p.GetSessionID()))
-
+			wrapper = nil
 			return nil
 		})
 	}

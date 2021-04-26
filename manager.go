@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/beowulflab/signal/signal-wss"
-	"github.com/lamhai1401/gologs/logs"
 	log "github.com/lamhai1401/gologs/logs"
 	"github.com/lamhai1401/testrtc/peer"
 	"github.com/lamhai1401/testrtc/utils"
@@ -145,7 +144,7 @@ func (m *Manager) processNotifySignal(values []interface{}) {
 		break
 	case "error":
 		log.Debug(fmt.Sprintf("Receive error from signal peer: %s_%s_%s", signalID, streamID, sessionID))
-		logs.Error(values)
+		log.Error(values)
 		break
 	default:
 		err = fmt.Errorf("receive not processing event: %s", event)
@@ -199,7 +198,7 @@ func (m *Manager) processPing(values []interface{}) {
 	if event == "process-mgr" && ping == "ping" {
 		m.sendPong(fromID)
 	} else {
-		logs.Warn("Wrong format ping msg: %v", values)
+		log.Warn("Wrong format ping msg: %v", values)
 	}
 }
 
@@ -248,7 +247,7 @@ func (m *Manager) sendError(signalID, streamID, role, sessionID, reason string) 
 func (m *Manager) sendOk(signalID, streamID, role, sessionID string) error {
 	if signal := m.getNotifySignal(); signal != nil {
 		signal.Send(signalID, streamID, role, sessionID, "ok")
-		logs.Info(fmt.Sprintf("Send ok to %s_%s_%s_%s", signalID, streamID, role, sessionID))
+		log.Info(fmt.Sprintf("Send ok to %s_%s_%s_%s", signalID, streamID, role, sessionID))
 		return nil
 	}
 	return ErrNilSignal
@@ -376,9 +375,9 @@ func (m *Manager) addIceCache(conn peer.Connection) {
 	for _, value := range tmp {
 		err := conn.AddICECandidate(value)
 		if err != nil {
-			logs.Error(fmt.Sprintf("Add %s ice candidate in cache err: %s ", conn.GetSessionID(), err.Error()))
+			log.Error(fmt.Sprintf("Add %s ice candidate in cache err: %s ", conn.GetSessionID(), err.Error()))
 		} else {
-			logs.Warn(fmt.Sprintf("Add %s ice candiate from cache successfully", conn.GetSessionID()))
+			log.Warn(fmt.Sprintf("Add %s ice candiate from cache successfully", conn.GetSessionID()))
 			m.removePeerICECache(value)
 		}
 	}
@@ -427,16 +426,16 @@ func (m *Manager) addSDP(signalID, streamID, role, sessionID string, sdp interfa
 		codec = m.getCodec()
 		// call thi chu func
 		pl, err := getFirstPayload(data.SDP, codec)
-		logs.Warn(fmt.Sprintf("%s_%s_%s getFirstPayload is %s", signalID, streamID, sessionID, pl))
+		log.Warn(fmt.Sprintf("%s_%s_%s getFirstPayload is %s", signalID, streamID, sessionID, pl))
 		if err != nil {
 			if num, err := strconv.Atoi(pl); err != nil {
 				payloadType = num
 			}
-			logs.Error("[getFirstPayload] has err: %s", err.Error())
+			log.Error("[getFirstPayload] has err: %s", err.Error())
 		}
 	}
 
-	logs.Warn(fmt.Sprintf("[processDestPeer] %s_%s_%s peer connection was created with codec (%s/%d)", signalID, streamID, sessionID, codec, payloadType))
+	log.Warn(fmt.Sprintf("[processDestPeer] %s_%s_%s peer connection was created with codec (%s/%d)", signalID, streamID, sessionID, codec, payloadType))
 	conn, err = m.addConnection(
 		signalID,
 		streamID,
@@ -488,7 +487,7 @@ func (m *Manager) handCandidateEvent(signalID, streamID, role, sessionID string,
 
 	err := connections.AddCandidate(streamID, candidateInit)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("RECEIVE CANDIDATE TOO SOON: %v", candidateInit))
+		log.Warn(fmt.Sprintf("RECEIVE CANDIDATE TOO SOON: %v", candidateInit))
 		m.setPeerICECache(candidateInit, sessionID)
 	}
 
@@ -510,7 +509,7 @@ func (m *Manager) handleReconnect(signalID, streamID, role, sessionID string) er
 
 func (m *Manager) handleSuccessPeer(signalId, streamId, role, subcriberSessionID string) {
 	// var err error
-	logs.Error(fmt.Sprintf("%s (signalID) %s (streamID) %s (sessionID) %s (role) peer success", signalId, streamId, subcriberSessionID, role))
+	log.Error(fmt.Sprintf("%s (signalID) %s (streamID) %s (sessionID) %s (role) peer success", signalId, streamId, subcriberSessionID, role))
 
 	// if conn := m.getConnection(signalId, streamId)
 
@@ -518,7 +517,7 @@ func (m *Manager) handleSuccessPeer(signalId, streamId, role, subcriberSessionID
 		return
 	}
 
-	logs.Error(fmt.Sprintf("Regiter id %s (signalID) %s (streamID) %s (sessionID) %s (role)", signalId, streamId, subcriberSessionID, role))
+	log.Error(fmt.Sprintf("Regiter id %s (signalID) %s (streamID) %s (sessionID) %s (role)", signalId, streamId, subcriberSessionID, role))
 	if err := m.register(signalId, streamId); err != nil {
 		m.sendError(signalId, streamId, role, subcriberSessionID, err.Error())
 	}
