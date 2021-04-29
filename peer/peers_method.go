@@ -148,6 +148,7 @@ func (p *Peers) handleICEConnectionState(
 			// set data state
 			// p.setPeerDataState(peer.getSessionID(), NOTYET)
 			// call peer success
+			// p.handleTransceiver(peer)
 			if handleAddPeer != nil {
 				handleAddPeer(signalID, streamID, peer.getRole(), peer.getSessionID())
 			}
@@ -164,55 +165,69 @@ func (p *Peers) handleICEConnectionState(
 			}
 		}()
 		break
-	case "closed":
-		sessionID := peer.getSessionID()
-		logs.Info(fmt.Sprintf("%s_%s_%s ice state is %s", signalID, streamID, peer.getSessionID(), state))
-		if conn := p.GetConnection(streamID); conn != nil {
-			if sessionID == peer.getSessionID() {
-				logs.Warn(fmt.Sprintf("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state))
-				p.RemoveConnection(peer.getStreamID())
-				// p.RemoveConnections(p.getSignalID())
-			}
-		}
-		break
+	// case "closed":
+	// 	sessionID := peer.getSessionID()
+	// 	logs.Info(fmt.Sprintf("%s_%s_%s ice state is %s", signalID, streamID, peer.getSessionID(), state))
+	// 	if conn := p.GetConnection(streamID); conn != nil {
+	// 		if sessionID == peer.getSessionID() {
+	// 			logs.Warn(fmt.Sprintf("Remove old peer connection (%s_%s_%s) has state %s", signalID, streamID, peer.getSessionID(), state))
+	// 			p.RemoveConnection(peer.getStreamID())
+	// 			// p.RemoveConnections(p.getSignalID())
+	// 		}
+	// 	}
+	// 	break
 	default:
 		return
 	}
 }
 
+// func (p *Peers) handleTransceiver(peer *Peer) {
+// 	switch peer.getRole() {
+// 	case "self":
+// 		go p.pushBack(peer.getVideoTransceiver().Receiver().Track(), peer.getLocalVideoTrack(), peer)
+// 		// go p.pushBack(peer.getAudioTransceiver().Receiver().Track(), peer.getLocalAudioTrack(), peer)
+// 		break
+// 	case "source":
+// 		// go p.pushToFwd(p.getAudioFwdm(), peer.getAudioTransceiver().Receiver().Track(), peer.getStreamID(), "audio", peer)
+// 		go p.pushToFwd(p.getVideoFwdm(), peer.getVideoTransceiver().Receiver().Track(), peer.getStreamID(), "video", peer)
+// 		break
+// 	default:
+// 		// logs.Info(fmt.Sprintf("Current %s track has role %s. Not is source/self role. No need to read RTP", kind, peer.getRole()))
+// 		return
+// 	}
+// }
+
 // handle peer remotetrack with streamID
 func (p *Peers) handleOnTrack(remoteTrack *webrtc.TrackRemote, peer *Peer) {
 	kind := remoteTrack.Kind().String()
 	var fwdm utils.Fwdm
-	var localTrack *webrtc.TrackLocalStaticRTP
+	// var localTrack *webrtc.TrackLocalStaticRTP
 
 	logs.Warn("Remote track STREAMID: ====[ ", remoteTrack.StreamID(), " ]====")
 	logs.Warn("Remote track ID: ====[ ", remoteTrack.ID(), " ]====")
 	logs.Warn("Remote track RID: ====[ ", remoteTrack.RID(), " ]====")
 	logs.Debug(fmt.Sprintf("Has %s remote track of id %s_%s", kind, p.getSignalID(), peer.getStreamID()))
+
 	switch kind {
 	case "video":
 		peer.HandleVideoTrack(remoteTrack)
 		// peer.setRemoteVideoTrack(remoteTrack)
 		fwdm = p.getVideoFwdm()
-		localTrack = peer.getLocalVideoTrack()
-		break
+		// localTrack = peer.getLocalVideoTrack()
 	case "audio":
 		// peer.setRemoteAudioTrack(remoteTrack)
 		fwdm = p.getAudioFwdm()
-		localTrack = peer.getLocalAudioTrack()
-		break
+		// localTrack = peer.getLocalAudioTrack()
 	default:
 		return
 	}
 
 	switch peer.getRole() {
-	case "self":
-		go p.pushBack(remoteTrack, localTrack, peer)
-		break
+	// case "self":
+	// 	go p.pushBack(remoteTrack, localTrack, peer)
+	// 	break
 	case "source":
 		go p.pushToFwd(fwdm, remoteTrack, peer.getStreamID(), kind, peer)
-		break
 	default:
 		logs.Info(fmt.Sprintf("Current %s track has role %s. Not is source/self role. No need to read RTP", kind, peer.getRole()))
 		return
@@ -242,13 +257,13 @@ func (p *Peers) pushToFwd(fwdm utils.Fwdm, remoteTrack *webrtc.TrackRemote, stre
 
 		if kind == "video" {
 			// Change the timestamp to only be the delta
-			oldTimestamp := pkg.Timestamp
-			if lastTimestamp == 0 {
-				pkg.Timestamp = 0
-			} else {
-				pkg.Timestamp -= lastTimestamp
-			}
-			lastTimestamp = oldTimestamp
+			// oldTimestamp := pkg.Timestamp
+			// if lastTimestamp == 0 {
+			// 	pkg.Timestamp = 0
+			// } else {
+			// 	pkg.Timestamp -= lastTimestamp
+			// }
+			// lastTimestamp = oldTimestamp
 
 			if lastVideoHeader == nil {
 				lastVideoHeader = &pkg.Header
@@ -261,10 +276,6 @@ func (p *Peers) pushToFwd(fwdm utils.Fwdm, remoteTrack *webrtc.TrackRemote, stre
 			lastAudioHeader = &pkg.Header
 			// lastAudioHeader.Timestamp = pkg.Timestamp
 		}
-
-		// if lastSequenceNumber == 0 {
-		// 	lastSequenceNumber = lastHeader.SequenceNumber
-		// }
 
 		// push video to fwd
 		fwd := fwdm.GetForwarder(streamID)
@@ -283,10 +294,6 @@ func (p *Peers) pushToFwd(fwdm utils.Fwdm, remoteTrack *webrtc.TrackRemote, stre
 				})
 			}
 			logs.Stack(fmt.Sprintf("Push %s rtp pkg to fwd %s", kind, streamID))
-
-			// if kind == "video" {
-			// 	spew.Dump(data.Header)
-			// }
 		}
 
 		pkg = nil
@@ -298,8 +305,8 @@ func (p *Peers) pushToFwd(fwdm utils.Fwdm, remoteTrack *webrtc.TrackRemote, stre
 var currTimestamp uint32
 
 func (p *Peers) formatVideoData(data *rtp.Packet) *rtp.Packet {
-	currTimestamp += data.Timestamp
-	data.Timestamp = currTimestamp
+	// currTimestamp += data.Timestamp
+	// data.Timestamp = currTimestamp
 	if lastVideoSequenceNumber == 0 {
 		lastVideoSequenceNumber = data.SequenceNumber
 		return data

@@ -17,8 +17,10 @@ type Connection interface {
 	CreateAnswer() error
 	AddSDP(values interface{}) error
 	AddICECandidate(icecandidate interface{}) error
-	AddVideoRTP(packet *rtp.Packet) error
-	AddAudioRTP(packet *rtp.Packet) error
+	// AddVideoRTP(packet *rtp.Packet) error
+	// AddAudioRTP(packet *rtp.Packet) error
+	AddVideoRTP(sessionID string, packet *rtp.Packet) error
+	AddAudioRTP(sessionID string, packet *rtp.Packet) error
 	SetIsConnected(states bool)
 	// SetRemoteVideoTrack(remoteTrack *webrtc.TrackRemote)
 	// SetRemoteAudioTrack(remoteTrack *webrtc.TrackRemote)

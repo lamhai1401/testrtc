@@ -5,8 +5,40 @@ import (
 	"strings"
 
 	"github.com/lamhai1401/gologs/logs"
+	log "github.com/lamhai1401/gologs/logs"
+	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 )
+
+// InitAPI linter
+func (p *Peer) initAPI() *webrtc.API {
+	// init media engine
+	m := p.initMediaEngine()
+	// Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
+	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
+	// this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
+	// for each PeerConnection.
+	i := &interceptor.Registry{}
+
+	// Use the default set of Interceptors
+	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
+		log.Error("initAPI RegisterDefaultInterceptors error: ", err.Error())
+		return nil
+	}
+
+	return webrtc.NewAPI(
+		webrtc.WithMediaEngine(m),
+		webrtc.WithInterceptorRegistry(i),
+		webrtc.WithSettingEngine(*p.initSettingEngine()))
+}
+
+func (p *Peer) initSettingEngine() *webrtc.SettingEngine {
+	settingEngine := &webrtc.SettingEngine{}
+	// settingEngine.SetTrickle(true)
+	// settingEngine.SetEphemeralUDPPortRange(20000, 60000)
+	// settingEngine.SetICETimeouts(10*time.Second, 20*time.Second, 1*time.Second)
+	return settingEngine
+}
 
 func (p *Peer) initMediaEngine() *webrtc.MediaEngine {
 	mediaEngine := &webrtc.MediaEngine{}

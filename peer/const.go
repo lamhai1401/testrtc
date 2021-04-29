@@ -37,3 +37,5 @@ const (
 	// Note: Matching should be case insensitive.
 	MimeTypePCMA = "audio/PCMA"
 )
+
+const defaultTrackState = "0"

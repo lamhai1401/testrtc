@@ -217,12 +217,11 @@ func (w *PeerWorker) Register(signalID string, streamID string, errHandler func(
 	if videofwdm := w.getVideoFwdm(); videofwdm != nil {
 		videofwdm.Unregister(streamID, p.GetSessionID())
 		videofwdm.Register(streamID, p.GetSessionID(), func(wrapper *utils.Wrapper) error {
-			err := p.AddVideoRTP(&wrapper.Pkg)
+			err := p.AddVideoRTP(p.GetSessionID(), &wrapper.Pkg)
 			if err != nil {
 				errHandler(signalID, streamID, p.GetSessionID(), err.Error())
 				return err
 			}
-			logs.Stack(fmt.Sprintf("Write %s video rtp to %s", streamID, p.GetSessionID()))
 			wrapper = nil
 			return nil
 		})
@@ -231,12 +230,11 @@ func (w *PeerWorker) Register(signalID string, streamID string, errHandler func(
 	if audiofwdm := w.getAudioFwdm(); audiofwdm != nil {
 		audiofwdm.Unregister(streamID, p.GetSessionID())
 		audiofwdm.Register(streamID, p.GetSessionID(), func(wrapper *utils.Wrapper) error {
-			err := p.AddAudioRTP(&wrapper.Pkg)
+			err := p.AddAudioRTP(p.GetSessionID(), &wrapper.Pkg)
 			if err != nil {
 				errHandler(signalID, streamID, p.GetSessionID(), err.Error())
 				return err
 			}
-			logs.Stack(fmt.Sprintf("Write %s audio rtp to %s", streamID, p.GetSessionID()))
 			return nil
 		})
 	}

@@ -1,4 +1,4 @@
-package conn
+package peer
 
 import (
 	"fmt"
@@ -84,7 +84,7 @@ func (t *Tracks) initLocalTrack(p *Peer) error {
 	return nil
 }
 
-// releaseTrack free a index of a track, but this method is not you at that time
+// releaseTrack free a index of a track
 func (t *Tracks) releaseTrack(sessionID string) {
 	if index := t.getUserInList(sessionID); index != "" {
 		t.releaseCheckList(index)

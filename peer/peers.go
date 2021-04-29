@@ -96,6 +96,7 @@ func (p *Peers) AddConnection(
 		sessionID,
 		codec,
 		payloadType,
+		"offerID",
 	)
 
 	conn, err := peer.InitPeer(configs)
