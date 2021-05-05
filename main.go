@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"runtime/debug"
 
 	"github.com/lamhai1401/gologs/logs"
@@ -24,6 +25,9 @@ func main() {
 	}
 	logs.Warn(m)
 
-	debug.WriteHeapDump(10)
-	http.ListenAndServe("localhost:8080", nil)
+	if os.Getenv("DEBUG") == "1" {
+		debug.WriteHeapDump(10)
+		http.ListenAndServe("localhost:8088", nil)
+	}
+	select {}
 }

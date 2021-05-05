@@ -255,8 +255,8 @@ github.com/pion/webrtc/v3 v3.0.0-20200725225747-940d6aae86fa/go.mod h1:+X4AaWkQE
 github.com/pion/webrtc/v3 v3.0.0-beta.2/go.mod h1:ClzzGjEdjA9XErOS0Qv0Rv8b++ongSAuqlhP/mAlPQQ=
 github.com/pion/webrtc/v3 v3.0.0-beta.4/go.mod h1:stOX+uPii8HN/Qqc/fXpbCyXp2fgKa/bMR6BHO3rF4I=
 github.com/pion/webrtc/v3 v3.0.11/go.mod h1:WEvXneGTeqNmiR59v5jTsxMc4yXQyOQcRsrdAbNwSEU=
-github.com/pion/webrtc/v3 v3.0.27 h1:cPQEFNFrRSMT11j9c9aTmXzL3ikKAFPE2kR0ZrQcviw=
-github.com/pion/webrtc/v3 v3.0.27/go.mod h1:QpLDmsU5a/a05n230gRtxZRvfHhFzn9ukGUL2x4G5ic=
+github.com/pion/webrtc/v3 v3.0.28 h1:OfJSRFCcs663mMceMv1t+sCu9Wo2fBOOrFnTQEf7JHU=
+github.com/pion/webrtc/v3 v3.0.28/go.mod h1:QpLDmsU5a/a05n230gRtxZRvfHhFzn9ukGUL2x4G5ic=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
