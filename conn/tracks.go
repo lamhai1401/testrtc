@@ -13,9 +13,10 @@ import (
 
 // Tracks linter
 type Tracks struct {
-	length      int
-	payloadType int    // video codecs code VP8 - 98 or VP9 - 99
-	codec       string // only video video/VP9 or video/VP8. default audio is opus
+	streamIDs   []string // array stream
+	length      int      // length of list track
+	payloadType int      // video codecs code VP8 - 98 or VP9 - 99
+	codec       string   // only video video/VP9 or video/VP8. default audio is opus
 	videoTracks map[string]*webrtc.TrackLocalStaticRTP
 	audioTracks map[string]*webrtc.TrackLocalStaticRTP
 	checkList   *utils.AdvanceMap // id - streamID/0  to check local map was pushing data or not
@@ -25,6 +26,7 @@ type Tracks struct {
 
 // NewTracks linter
 func NewTracks(
+	streamIDs []string,
 	length int,
 	payloadType int, // video codecs code VP8 - 98 or VP9 - 99
 	codec string,
@@ -37,6 +39,7 @@ func NewTracks(
 		listUser:    make(map[string]string),
 		payloadType: payloadType,
 		codec:       codec,
+		streamIDs:   streamIDs,
 	}
 
 	return t
@@ -48,39 +51,59 @@ func (t *Tracks) initLocalTrack(p *Peer) error {
 		return fmt.Errorf("Peer connections is nil")
 	}
 
-	for i := 1; i <= t.getLength(); i++ {
+	streamIDs := t.getStreamIDs()
+	length := t.getLength()
+
+	if streamIDs != nil && len(streamIDs) > 0 && p.getRole() == sourceRole {
+		length = len(streamIDs)
+	}
+
+	for i := 1; i <= length; i++ {
 		id := fmt.Sprintf("%d", i)
-		videoTrack, err := t._createVideoTrack(id)
-		if err != nil {
-			return err
+		if p.getRole() == sourceRole {
+			if streamID := t.getStreamID(i); streamID != "" {
+				id = streamID
+			}
 		}
 
-		audioTrack, err := t._createAudioTrack(id)
-		if err != nil {
+		if err := t._initTrack(conn, id); err != nil {
 			return err
 		}
-		// Add this newly created track to the PeerConnection
-		_, err = conn.AddTrack(videoTrack)
-		if err != nil {
-			return err
-		}
-
-		// Add this newly created track to the PeerConnection
-		_, err = conn.AddTrack(audioTrack)
-		if err != nil {
-			return err
-		}
-
-		// set track
-		t.setVideoTracks(id, videoTrack)
-		t.setAudioTracks(id, audioTrack)
-
-		// save free track to list
-		t.setCheckList(id, defaultTrackState)
 	}
 
 	// set process rtcp
 	t._processRTCP(conn)
+	return nil
+}
+
+func (t *Tracks) _initTrack(conn *webrtc.PeerConnection, id string) error {
+	videoTrack, err := t._createVideoTrack(id)
+	if err != nil {
+		return err
+	}
+
+	audioTrack, err := t._createAudioTrack(id)
+	if err != nil {
+		return err
+	}
+	// Add this newly created track to the PeerConnection
+	_, err = conn.AddTrack(videoTrack)
+	if err != nil {
+		return err
+	}
+
+	// Add this newly created track to the PeerConnection
+	_, err = conn.AddTrack(audioTrack)
+	if err != nil {
+		return err
+	}
+
+	// set track
+	t.setVideoTracks(id, videoTrack)
+	t.setAudioTracks(id, audioTrack)
+
+	// save free track to list
+	t.setCheckList(id, defaultTrackState)
 	return nil
 }
 

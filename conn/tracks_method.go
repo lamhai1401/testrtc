@@ -126,3 +126,15 @@ func (t *Tracks) setPayloadType(c int) {
 	defer t.mutex.Unlock()
 	t.payloadType = c
 }
+
+func (t *Tracks) getStreamIDs() []string {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+	return t.streamIDs
+}
+
+func (t *Tracks) getStreamID(index int) string {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+	return t.streamIDs[index]
+}
