@@ -175,16 +175,16 @@ func (p *Peer) pictureLossIndication(remoteTrack *webrtc.TrackRemote) {
 	}
 }
 
-func (p *Peer) getStreamIDs() []string {
+func (p *Peer) getStreamID() string {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	return p.streamIDs
+	return p.streamID
 }
 
-func (p *Peer) setStreamIDs(s []string) {
+func (p *Peer) setStreamID(s string) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	p.streamIDs = s
+	p.streamID = s
 }
 
 func (p *Peer) getSessionID() string {
@@ -199,7 +199,7 @@ func (p *Peer) setSessionID(s string) {
 	p.sessionID = s
 }
 
-func (p *Peer) getTracks() *Tracks {
+func (p *Peer) getTracks() LocalTrack {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.tracks

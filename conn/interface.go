@@ -15,7 +15,12 @@ type Connection interface {
 	GetSessionID() string  // for handle ice restart
 	SetSessionID(s string) // for handle ice restart
 	HandleVideoTrack(remoteTrack *webrtc.TrackRemote)
-	InitPeer(configs *webrtc.Configuration) (*webrtc.PeerConnection, error)
+	InitPeer(
+		trackLength int,
+		configs *webrtc.Configuration,
+		audioIDs []string, // for add dest audio track
+		videoIDs []string, // for add source and dest video track
+	) (*webrtc.PeerConnection, error)
 	IsConnected() bool
 	CreateOffer(iceRestart bool) error
 	CreateAnswer() error
@@ -30,4 +35,10 @@ type Connection interface {
 	// GetRemoteTrack() (*webrtc.TrackRemote, *webrtc.TrackRemote)
 	GetLocalDescription() (*webrtc.SessionDescription, error)
 	Close()
+}
+
+type LocalTrack interface {
+	InitLocalTrack(p *Peer) error
+	GetVideoTrack(id string) (*webrtc.TrackLocalStaticRTP, error)
+	GetAudioTrack(id string) (*webrtc.TrackLocalStaticRTP, error)
 }

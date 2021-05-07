@@ -17,7 +17,7 @@ type Peer struct {
 	payloadType int               // video codecs code VP8 - 98 or VP9 - 99
 	codec       string            // only video video/VP9 or video/VP8. default audio is opus
 	sessionID   string            // save session old or new
-	streamIDs   []string          // save to stream id
+	streamID    string            // save to stream id
 	offerID     string            // save offerID for unique peer connection
 	cookieID    string            // internal cookieID to check remove
 	role        string            // source or des
@@ -27,7 +27,7 @@ type Peer struct {
 	hasVideo    bool              // has video track or not
 	hasAudio    bool              // has audio track or not
 	bitrate     *int              // bitrate
-	tracks      *Tracks           // for handle multi video and audio
+	tracks      LocalTrack        // for handle multi video and audio
 	conn        *webrtc.PeerConnection
 	mutex       sync.RWMutex
 }
@@ -35,7 +35,7 @@ type Peer struct {
 // NewPeerConnection linter
 func NewPeerConnection(
 	bitrate *int,
-	streamID []string,
+	streamID string,
 	role string,
 	sessionID string,
 	codec string,
@@ -46,7 +46,7 @@ func NewPeerConnection(
 }
 func newPeerConnection(
 	bitrate *int,
-	streamIDs []string,
+	streamID string,
 	role string,
 	sessionID string,
 	codec string,
@@ -55,7 +55,7 @@ func newPeerConnection(
 ) *Peer {
 	p := &Peer{
 		sessionID:   sessionID,
-		streamIDs:   streamIDs,
+		streamID:    streamID,
 		role:        role,
 		bitrate:     bitrate,
 		isConnected: false,
@@ -73,13 +73,16 @@ func newPeerConnection(
 		br := 200
 		p.bitrate = &br
 	}
-	log.Warn(fmt.Sprintf("%s_%s_%s_%s peer connection was created with video codec, code, bitrate (%v/%d/%d)", streamIDs, sessionID, offerID, p.getCookieID(), codec, payloadType, *p.bitrate))
+	log.Warn(fmt.Sprintf("%s_%s_%s_%s peer connection was created with video codec, code, bitrate (%s/%d/%d)", streamID, sessionID, offerID, p.getCookieID(), codec, payloadType, *p.bitrate))
 	return p
 }
 
 // InitPeer linter
 func (p *Peer) InitPeer(
+	trackLength int,
 	configs *webrtc.Configuration,
+	audioIDs []string, // for add dest audio track
+	videoIDs []string, // for add source and dest video track
 ) (*webrtc.PeerConnection, error) {
 	api := p.initAPI()
 	if api == nil {
@@ -92,8 +95,16 @@ func (p *Peer) InitPeer(
 	}
 	p.setConn(conn)
 
-	tracks := NewTracks(p.streamIDs, 1, p.payloadType, p.codec)
-	if err := tracks.initLocalTrack(p); err != nil {
+	var tracks LocalTrack
+
+	switch p.role {
+	case sourceRole:
+		tracks = NewSouceTracks(audioIDs, videoIDs, p.payloadType, p.codec)
+	case destRole:
+		tracks = NewDestTracks(trackLength, p.payloadType, p.codec)
+	}
+
+	if err := tracks.InitLocalTrack(p); err != nil {
 		return nil, err
 	}
 	p.tracks = tracks
@@ -109,7 +120,7 @@ func (p *Peer) Close() {
 		if err := p.closeConn(); err != nil {
 			log.Error(err.Error())
 		}
-		log.Warn(fmt.Sprintf("%v_%s webrtc peer connection was closed", p.getStreamIDs(), p.getSessionID()))
+		log.Warn(fmt.Sprintf("%s_%s webrtc peer connection was closed", p.getStreamID(), p.getSessionID()))
 	}
 }
 
@@ -157,7 +168,7 @@ func (p *Peer) AddICECandidate(icecandidate interface{}) error {
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("Add ice candidate for %v_%s_%s_%s successfully", p.getStreamIDs(), p.GetSessionID(), p.getOffeerID(), p.GetCookieID()))
+	log.Info(fmt.Sprintf("Add ice candidate for %s_%s_%s_%s successfully", p.getStreamID(), p.GetSessionID(), p.getOffeerID(), p.GetCookieID()))
 	return nil
 }
 
@@ -281,10 +292,13 @@ func (p *Peer) HasAudioTrack() bool {
 
 // AddVideoRTP write rtp to local video track
 func (p *Peer) AddVideoRTP(streamID, sessionID string, packet *rtp.Packet) error {
+	// get local track
 	tracks := p.getTracks()
 	if tracks == nil {
-		return fmt.Errorf("Tracks of peer (%s) is nil", sessionID)
+		return fmt.Errorf("tracks of peer (%s) is nil", sessionID)
 	}
+
+	// parse to soure or dest to get local video
 
 	var index string
 	var err error
@@ -293,14 +307,12 @@ func (p *Peer) AddVideoRTP(streamID, sessionID string, packet *rtp.Packet) error
 	if p.getRole() == sourceRole {
 		index = streamID
 	} else {
-		index, err = tracks.getIndexOf(sessionID)
-		if err != nil {
-			return err
-		}
+		index = sessionID
 	}
 
-	track = tracks.getVideoTrack(index)
-	if track == nil {
+	track, err = tracks.GetVideoTrack(index)
+	if err != nil && track == nil {
+		log.Info(err.Error())
 		return fmt.Errorf(ErrNilVideoTrack)
 	}
 	if err := p.writeRTP(packet, track); err != nil {
@@ -313,7 +325,7 @@ func (p *Peer) AddVideoRTP(streamID, sessionID string, packet *rtp.Packet) error
 func (p *Peer) AddAudioRTP(streamID, sessionID string, packet *rtp.Packet) error {
 	tracks := p.getTracks()
 	if tracks == nil {
-		return fmt.Errorf("Tracks of peer (%s) is nil", sessionID)
+		return fmt.Errorf("tracks of peer (%s) is nil", sessionID)
 	}
 
 	var index string
@@ -323,14 +335,12 @@ func (p *Peer) AddAudioRTP(streamID, sessionID string, packet *rtp.Packet) error
 	if p.getRole() == sourceRole {
 		index = streamID
 	} else {
-		index, err = tracks.getIndexOf(sessionID)
-		if err != nil {
-			return err
-		}
+		index = sessionID
 	}
 
-	track = tracks.getAudioTrack(index)
-	if track == nil {
+	track, err = tracks.GetAudioTrack(index)
+	if err != nil && track == nil {
+		log.Info(err.Error())
 		return fmt.Errorf(ErrNilAudioTrack)
 	}
 	if err := p.writeRTP(packet, track); err != nil {
