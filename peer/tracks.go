@@ -73,16 +73,16 @@ func (t *Tracks) initLocalVideoTrack(id string, conn *webrtc.PeerConnection) err
 		return err
 	}
 
-	// Add this newly created track to the PeerConnection
-	sender, err := conn.AddTrack(videoTrack)
-	if err != nil {
-		return err
-	}
+	// // Add this newly created track to the PeerConnection
+	// sender, err := conn.AddTrack(videoTrack)
+	// if err != nil {
+	// 	return err
+	// }
 
-	// set track
+	// // set track
 	t.setVideoTracks(id, videoTrack)
 
-	_, err = initTransceiver(conn, "video", sender, videoTrack)
+	_, err = initTransceiver(conn, "video", nil, videoTrack)
 	return err
 }
 
@@ -92,15 +92,15 @@ func (t *Tracks) initLocalAudioTrack(id string, conn *webrtc.PeerConnection) err
 		return err
 	}
 
-	// Add this newly created track to the PeerConnection
-	sender, err := conn.AddTrack(audioTrack)
-	if err != nil {
-		return err
-	}
+	// // Add this newly created track to the PeerConnection
+	// sender, err := conn.AddTrack(audioTrack)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// set track
 	t.setAudioTracks(id, audioTrack)
-	_, err = initTransceiver(conn, "audio", sender, audioTrack)
+	_, err = initTransceiver(conn, "audio", nil, audioTrack)
 	return err
 }
 
