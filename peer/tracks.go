@@ -50,30 +50,13 @@ func (t *Tracks) initLocalTrack(p *Peer) error {
 
 	for i := 1; i <= t.getLength(); i++ {
 		id := fmt.Sprintf("%d", i)
-		videoTrack, err := t._createVideoTrack(id)
-		if err != nil {
+		if err := t.initLocalVideoTrack(id, conn); err != nil {
 			return err
 		}
 
-		audioTrack, err := t._createAudioTrack(id)
-		if err != nil {
+		if err := t.initLocalAudioTrack(id, conn); err != nil {
 			return err
 		}
-		// Add this newly created track to the PeerConnection
-		_, err = conn.AddTrack(videoTrack)
-		if err != nil {
-			return err
-		}
-
-		// Add this newly created track to the PeerConnection
-		_, err = conn.AddTrack(audioTrack)
-		if err != nil {
-			return err
-		}
-
-		// set track
-		t.setVideoTracks(id, videoTrack)
-		t.setAudioTracks(id, audioTrack)
 
 		// save free track to list
 		t.setCheckList(id, defaultTrackState)
@@ -82,6 +65,43 @@ func (t *Tracks) initLocalTrack(p *Peer) error {
 	// set process rtcp
 	t._processRTCP(conn)
 	return nil
+}
+
+func (t *Tracks) initLocalVideoTrack(id string, conn *webrtc.PeerConnection) error {
+	videoTrack, err := t._createVideoTrack(id)
+	if err != nil {
+		return err
+	}
+
+	// Add this newly created track to the PeerConnection
+	sender, err := conn.AddTrack(videoTrack)
+	if err != nil {
+		return err
+	}
+
+	// set track
+	t.setVideoTracks(id, videoTrack)
+
+	_, err = initTransceiver(conn, "video", sender, videoTrack)
+	return err
+}
+
+func (t *Tracks) initLocalAudioTrack(id string, conn *webrtc.PeerConnection) error {
+	audioTrack, err := t._createAudioTrack(id)
+	if err != nil {
+		return err
+	}
+
+	// Add this newly created track to the PeerConnection
+	sender, err := conn.AddTrack(audioTrack)
+	if err != nil {
+		return err
+	}
+
+	// set track
+	t.setAudioTracks(id, audioTrack)
+	_, err = initTransceiver(conn, "audio", sender, audioTrack)
+	return err
 }
 
 // releaseTrack free a index of a track

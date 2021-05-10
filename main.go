@@ -17,7 +17,7 @@ func main() {
 
 	m, err := NewPeerWorker(
 		"wss://signal-conference-staging.quickom.com",
-		"hai2",
+		"hai3",
 	)
 
 	if err != nil {

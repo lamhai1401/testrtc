@@ -92,7 +92,7 @@ func (p *Peer) InitPeer(
 	}
 	p.setConn(conn)
 
-	tracks := NewTracks(1, p.payloadType, p.codec)
+	tracks := NewTracks(2, p.payloadType, p.codec)
 	if err := tracks.initLocalTrack(p); err != nil {
 		return nil, err
 	}
@@ -283,7 +283,7 @@ func (p *Peer) AddSDP(values interface{}) error {
 			return err
 		}
 	default:
-		return fmt.Errorf("Invalid sdp type: %s", data.Type)
+		return fmt.Errorf("invalid sdp type: %s", data.Type)
 	}
 	return nil
 }
